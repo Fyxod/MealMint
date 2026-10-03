@@ -625,7 +625,7 @@ export class FoodService extends EventEmitter {
       if (name === "food_offers")
         return {
           offers: raw,
-          note: "Contextual visibility, not verified savings. Payment-only offers unverified.",
+          note: "Contextual visibility, not verified savings. Applicability may refer to the current cart; proposed items or thresholds can change eligibility. Check the proposed cart through approved comparison. Payment-only offers unverified.",
         };
       return {
         candidates: this.register(
