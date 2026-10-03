@@ -1,0 +1,4 @@
+# Replace before deploying; no access logs containing OAuth query strings.
+YOUR_DOMAIN {
+    reverse_proxy 127.0.0.1:3000
+}
