@@ -1,0 +1,30 @@
+[Unit]
+Description=MealMint personal food assistant
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=mealmint
+Group=mealmint
+WorkingDirectory=/opt/mealmint/current
+EnvironmentFile=/etc/mealmint/mealmint.env
+Environment=NODE_ENV=production
+Environment=HOME=/home/mealmint
+Environment=CODEX_HOME=/home/mealmint/.codex
+Environment=PATH=/opt/mealmint/runtime/bin:/usr/bin:/bin
+ExecStart=/opt/mealmint/runtime/bin/node dist/server/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/mealmint /home/mealmint/.codex
+MemoryHigh=350M
+MemoryMax=500M
+MemorySwapMax=1G
+TasksMax=128
+[Install]
+WantedBy=multi-user.target

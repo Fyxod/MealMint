@@ -1,4 +1,4 @@
-# Swiggy MCP food assistant
+# MealMint
 
 Chat about your budget and food preferences in a web app or a private Telegram chat. A Codex-powered agent explores restaurants, menus and contextual deals, then shortlists inexpensive options. Delivered totals are checked only after you approve a temporary cart comparison.
 
@@ -73,4 +73,4 @@ The first deployment is a personal, single-owner service. `APP_ACCESS_TOKEN` pro
 
 Runtime secrets live in `.env` and `.local/`; both are ignored. The Swiggy token store uses AES-256-GCM with a local restricted key. This protects stored files from casual disclosure, not an attacker who controls the host. Conversations are held in memory, capped, and lost when restarting. Codex threads are ephemeral; do not publish account transcripts or runtime logs.
 
-Durable context is in [project-memory](project-memory/README.md), maintained with the requested [Durable Project Memory skill](https://github.com/Fyxod/durable-project-memory). The personal prototype is hosted at [foodfinder.parthkatiyar.xyz](https://foodfinder.parthkatiyar.xyz/), protected by an owner access token. See [deployment audit](docs/DEPLOYMENT_AUDIT.md), [application answers](docs/APPLICATION_PACKET.md) and [video brief](docs/VIDEO_BRIEF.md). The [public video walkthrough](https://foodfinder.parthkatiyar.xyz/demo/) is available without sign-in; it uses real Luna max inference and synthetic food data. See [video delivery](docs/VIDEO_DELIVERY.md). Real Swiggy access and Telegram bot credentials remain pending.
+Durable context is in [project-memory](project-memory/README.md), maintained with the requested [Durable Project Memory skill](https://github.com/Fyxod/durable-project-memory). The personal prototype is hosted at [mealmint.parthkatiyar.xyz](https://mealmint.parthkatiyar.xyz/), protected by an owner access token. See [deployment audit](docs/DEPLOYMENT_AUDIT.md), [application answers](docs/APPLICATION_PACKET.md) and [video brief](docs/VIDEO_BRIEF.md). The [public video walkthrough](https://mealmint.parthkatiyar.xyz/demo/) is available without sign-in; it uses real Luna max inference and synthetic food data. See [video delivery](docs/VIDEO_DELIVERY.md). Real Swiggy access and Telegram bot credentials remain pending.

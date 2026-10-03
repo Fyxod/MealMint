@@ -42,7 +42,7 @@ export class LiveFoodGateway implements FoodGateway {
       const token = await this.token();
       if (!token) throw new Error("Connect Swiggy first.");
       const client = new Client({
-        name: "swiggy-mcp-personal-assistant",
+        name: "mealmint-personal-assistant",
         version: "0.1.0",
       });
       await client.connect(

@@ -10,7 +10,7 @@ describe('DirectiveStore', () => {
   let directives: DirectiveStore;
 
   beforeEach(async () => {
-    directory = await mkdtemp(path.join(os.tmpdir(), 'swiggy-mcp-directives-'));
+    directory = await mkdtemp(path.join(os.tmpdir(), 'mealmint-directives-'));
     directives = new DirectiveStore(new SecretStore(directory));
   });
 

@@ -45,7 +45,7 @@ describe('SecretStore', () => {
   let store: SecretStore;
 
   beforeEach(async () => {
-    directory = await mkdtemp(path.join(os.tmpdir(), 'swiggy-mcp-secrets-'));
+    directory = await mkdtemp(path.join(os.tmpdir(), 'mealmint-secrets-'));
     store = new SecretStore(directory);
   });
 

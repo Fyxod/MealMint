@@ -144,7 +144,7 @@ export class TelegramBot {
       await this.store.set("telegram-owner", { id: user.id });
       await this.send(
         chat,
-        "Connected to your personal food assistant. Use /addresses to choose a delivery address, then tell me your budget and preferences.",
+        "Connected to MealMint, your personal food assistant. Use /addresses to choose a delivery address, then tell me your budget and preferences.",
       );
       return;
     }

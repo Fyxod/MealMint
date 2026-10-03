@@ -1,8 +1,8 @@
-foodfinder.parthkatiyar.xyz {
+mealmint.parthkatiyar.xyz {
     encode gzip zstd
     redir /demo /demo/ 308
     handle /demo/* {
-        root * /srv/foodfinder-public
+        root * /srv/mealmint-public
         file_server
     }
     handle {

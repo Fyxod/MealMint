@@ -16,7 +16,7 @@ const effort = process.env.CODEX_EFFORT;
 assert.equal(model, 'gpt-6-luna', 'Set CODEX_MODEL=gpt-6-luna to run the requested live test.');
 assert.equal(effort, 'max', 'Set CODEX_EFFORT=max to run the requested live test.');
 
-const runtimeDir = await mkdtemp(path.join(os.tmpdir(), 'swiggy-mcp-codex-advanced-'));
+const runtimeDir = await mkdtemp(path.join(os.tmpdir(), 'mealmint-codex-advanced-'));
 const secretDir = path.join(runtimeDir, 'preferences');
 const agent = new CodexProvider({
   bin: process.env.CODEX_BIN || 'codex',

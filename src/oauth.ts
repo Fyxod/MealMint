@@ -85,7 +85,7 @@ export class SwiggyOAuth {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          client_name: "Personal Swiggy food assistant",
+          client_name: "MealMint",
           redirect_uris: [this.redirectUri],
           token_endpoint_auth_method: "none",
           grant_types: ["authorization_code"],

@@ -21,7 +21,7 @@ describe('HTTP shutdown', () => {
   });
 
   it('ends an active SSE response and removes its service listener on app.close()', async () => {
-    directory = await mkdtemp(path.join(os.tmpdir(), 'swiggy-mcp-shutdown-'));
+    directory = await mkdtemp(path.join(os.tmpdir(), 'mealmint-shutdown-'));
     runtime = await createApp({
       host: '127.0.0.1',
       port: 0,

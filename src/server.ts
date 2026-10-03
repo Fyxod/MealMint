@@ -98,8 +98,8 @@ export async function createApp(options: AppOptions = {}) {
     const cookie = String(req.headers.cookie ?? "")
       .split(";")
       .map((s: string) => s.trim())
-      .find((s: string) => s.startsWith("food_session="))
-      ?.slice(13);
+      .find((s: string) => s.startsWith("mealmint_session="))
+      ?.slice("mealmint_session=".length);
     const s = cookie ? sessions.get(cookie) : null;
     return s && s.expiresAt > Date.now() ? s : null;
   };
@@ -183,7 +183,7 @@ export async function createApp(options: AppOptions = {}) {
     sessions.set(id, { csrf, expiresAt: Date.now() + 8 * 60 * 60000 });
     reply.header(
       "Set-Cookie",
-      `food_session=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${origin.startsWith("https://") ? "; Secure" : ""}`,
+      `mealmint_session=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${origin.startsWith("https://") ? "; Secure" : ""}`,
     );
     return { signedIn: true, csrf };
   });

@@ -9,7 +9,7 @@ describe('HTTP application security', () => {
   let runtimes: Awaited<ReturnType<typeof createApp>>[];
 
   beforeEach(async () => {
-    directory = await mkdtemp(path.join(os.tmpdir(), 'swiggy-mcp-server-'));
+    directory = await mkdtemp(path.join(os.tmpdir(), 'mealmint-server-'));
     runtimes = [];
   });
 

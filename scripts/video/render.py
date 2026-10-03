@@ -39,7 +39,7 @@ def browser(src,z,focus):
     d=ImageDraw.Draw(out)
     for xx,c in [(26,'#f2766b'),(49,'#efbf50'),(72,'#62bf77')]: d.ellipse((xx,18,xx+12,30),fill=c)
     d.rounded_rectangle((475,9,1145,38),radius=9,fill='#eef0e9')
-    text(d,(810,13),'foodfinder.parthkatiyar.xyz',16,'#5c6d5c',center=True)
+    text(d,(810,13),'mealmint.parthkatiyar.xyz',16,'#5c6d5c',center=True)
     return out,(cx-cw/2,cy-ch/2,cw,ch)
 
 def pointer(im,px,py,click=None):
@@ -60,15 +60,15 @@ def frame(t,scenes,captures):
         intro=t<4; p=ease(t/1.2) if intro else ease((t-51)/1.1)
         off=int((1-p)*32)
         d.rounded_rectangle((896,230+off,1024,358+off),radius=34,fill='#315f3b')
-        text(d,(960,257+off),'f',64,'#ffffff',True,True)
-        text(d,(960,395+off),'foodfinder',72,bold=True,center=True)
+        text(d,(960,257+off),'M',64,'#ffffff',True,True)
+        text(d,(960,395+off),'MealMint',72,bold=True,center=True)
         text(d,(960,506+off),'Good food. A smaller bill.',52,center=True)
         if intro:
             text(d,(960,620),'A personal food assistant, powered by Codex',28,'#5b705c',center=True)
         else:
-            text(d,(960,620),'foodfinder.parthkatiyar.xyz/demo/',30,'#315f3b',center=True)
+            text(d,(960,620),'mealmint.parthkatiyar.xyz/demo/',30,'#315f3b',center=True)
             text(d,(960,677),'Web chat  •  Telegram adapter',24,'#5b705c',center=True)
-            text(d,(960,760),'github.com/Fyxod/swiggy-mcp',23,'#5b705c',center=True)
+            text(d,(960,760),'github.com/Fyxod/MealMint',23,'#5b705c',center=True)
         text(d,(960,985),'Prototype • Synthetic Swiggy data • No orders or payments',22,'#687663',center=True)
         return im.convert('RGB')
     scene=next(s for s in scenes if s['start']<=t<s['end'])
@@ -100,7 +100,7 @@ def frame(t,scenes,captures):
     return im.convert('RGB')
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument('--captures',type=Path,default=ROOT/'.local/hosting/demo'); ap.add_argument('--output',type=Path,default=ROOT/'.local/hosting/video/foodfinder-demo.mp4'); ap.add_argument('--preview',action='store_true'); ap.add_argument('--start',type=float,default=0); ap.add_argument('--duration',type=float,default=58); a=ap.parse_args()
+    ap=argparse.ArgumentParser(); ap.add_argument('--captures',type=Path,default=ROOT/'.local/hosting/demo'); ap.add_argument('--output',type=Path,default=ROOT/'.local/hosting/video/mealmint-demo.mp4'); ap.add_argument('--preview',action='store_true'); ap.add_argument('--start',type=float,default=0); ap.add_argument('--duration',type=float,default=58); a=ap.parse_args()
     scenes=json.loads((Path(__file__).with_name('scenes.json')).read_text())
     captures={s['file']:Image.open(a.captures/s['file']).convert('RGB') for s in scenes}
     a.output.parent.mkdir(parents=True,exist_ok=True)

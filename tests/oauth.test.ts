@@ -45,7 +45,7 @@ describe('SwiggyOAuth', () => {
 
   beforeEach(async () => {
     dateNow = vi.spyOn(Date, 'now');
-    directory = await mkdtemp(path.join(os.tmpdir(), 'swiggy-mcp-oauth-'));
+    directory = await mkdtemp(path.join(os.tmpdir(), 'mealmint-oauth-'));
     store = new SecretStore(directory);
   });
 
@@ -82,7 +82,7 @@ describe('SwiggyOAuth', () => {
     expect(authorize.searchParams.get('scope')).toBe('mcp:tools');
     expect(authorize.searchParams.get('resource')).toBe(`${base}/food`);
     expect(registrationBody).toMatchObject({
-      client_name: 'Personal Swiggy food assistant',
+      client_name: 'MealMint',
       redirect_uris: [redirectUri],
       token_endpoint_auth_method: 'none',
       grant_types: ['authorization_code'],

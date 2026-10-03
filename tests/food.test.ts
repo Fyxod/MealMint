@@ -72,7 +72,7 @@ describe('LiveFoodGateway', () => {
       restaurants: ['synthetic-restaurant']
     });
 
-    expect(sdk.Client).toHaveBeenCalledWith({ name: 'swiggy-mcp-personal-assistant', version: '0.1.0' });
+    expect(sdk.Client).toHaveBeenCalledWith({ name: 'mealmint-personal-assistant', version: '0.1.0' });
     expect(sdk.Transport).toHaveBeenCalledWith(
       new URL('https://mcp.swiggy.com/food'),
       { requestInit: { headers: { Authorization: 'Bearer synthetic-access-token' } } }

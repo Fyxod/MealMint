@@ -24,7 +24,7 @@ assert.equal(
 );
 
 const runtimeDir = await mkdtemp(
-  path.join(os.tmpdir(), "swiggy-mcp-codex-smoke-"),
+  path.join(os.tmpdir(), "mealmint-codex-smoke-"),
 );
 const agent = new CodexProvider({
   bin: process.env.CODEX_BIN || "codex",

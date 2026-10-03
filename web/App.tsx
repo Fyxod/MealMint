@@ -199,7 +199,7 @@ export function App() {
         <div className="logo large">
           <Utensils />
         </div>
-        <h1>Your food assistant</h1>
+        <h1>MealMint</h1>
         <p>
           {session?.tokenRequired
             ? "Enter your personal app access token."
@@ -235,7 +235,7 @@ export function App() {
             <Utensils size={20} />
           </span>
           <span>
-            food<span className="brand-light">finder</span>
+            Meal<span className="brand-light">Mint</span>
             <small>YOUR PERSONAL ASSISTANT</small>
           </span>
         </a>
@@ -290,11 +290,11 @@ export function App() {
             </div>
           </div>
           <a
-            href="https://github.com/Fyxod/swiggy-mcp"
+            href="https://github.com/Fyxod/MealMint"
             target="_blank"
             rel="noreferrer"
           >
-            Open-source · swiggy-mcp <ArrowRight size={12} />
+            Open-source · MealMint <ArrowRight size={12} />
           </a>
         </div>
       </aside>

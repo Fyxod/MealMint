@@ -65,7 +65,7 @@ describe('TelegramBot', () => {
   let runtimes: { service: FoodService; gateway: MockFoodGateway; bot: TelegramBot; calls: ApiCall[] }[];
 
   beforeEach(async () => {
-    directory = await mkdtemp(path.join(os.tmpdir(), 'swiggy-mcp-telegram-'));
+    directory = await mkdtemp(path.join(os.tmpdir(), 'mealmint-telegram-'));
     store = new SecretStore(directory);
     runtimes = [];
   });
@@ -129,7 +129,7 @@ describe('TelegramBot', () => {
     expect(await store.get('telegram-owner')).toEqual({ id: ownerId });
     expect(await runtime.bot.status()).toMatchObject({ configured: true, paired: true, username: 'SyntheticFoodBot' });
     expect(runtime.calls.filter(call => call.method === 'sendMessage')).toHaveLength(1);
-    expect(runtime.calls.find(call => call.method === 'sendMessage')?.body.text).toContain('Connected to your personal food assistant.');
+    expect(runtime.calls.find(call => call.method === 'sendMessage')?.body.text).toContain('Connected to MealMint, your personal food assistant.');
   });
 
   it('selects a saved address and blocks approve callbacks from discarding a nonempty cart', async () => {
