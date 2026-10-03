@@ -1,4 +1,4 @@
-# Foodfinder video delivery
+# MealMint video delivery
 
 2026-10-03. The deliverable is a 58-second, 1920×1080, 30 fps H.264 MP4
 with a Mac-style browser frame, eased large pointer, click rings, gentle zooms
@@ -10,7 +10,7 @@ menu, address and price data is synthetic. The film shows budget/preference
 input, exact same-restaurant bundle, user approval, SAVE20 price comparison and
 saved preference review. Telegram is described only as an adapter.
 
-The source change in release `4a9d4ff` explains that a coupon's current-cart
+The coupon source change originally in release `4a9d4ff` explains that a coupon's current-cart
 eligibility can differ from a proposed bundle. Typecheck, 73 tests and production
 build passed before deployment. A fresh hosted agent flow returned the expected
 ₹218 listed subtotal and ₹217.30 verified mock payable total after approval. The
@@ -23,11 +23,11 @@ never on the 1 GB VM.
 
 ## Verified publication
 
-- Watch: https://foodfinder.parthkatiyar.xyz/demo/
-- Direct video: https://foodfinder.parthkatiyar.xyz/demo/foodfinder-demo.mp4
-- Callback for the application: https://foodfinder.parthkatiyar.xyz/auth/swiggy/callback
-- Local file: `.local/hosting/video/foodfinder-demo.mp4`, 3,258,232 bytes.
-- SHA-256: `4710016bbcb28b0d4d645e343a59e0641f881fca1d06dd4bacc6ad33a01c5015`.
+- Watch: https://mealmint.parthkatiyar.xyz/demo/
+- Direct video: https://mealmint.parthkatiyar.xyz/demo/mealmint-demo.mp4
+- Callback for the application: https://mealmint.parthkatiyar.xyz/auth/swiggy/callback
+- Local file: `.local/hosting/video/mealmint-demo.mp4`, 3,180,440 bytes.
+- SHA-256: `ad8d0c076113a8450618657f3c0aaceac81e926cb49fec19451715fe8dcef630`.
 
 FFprobe confirmed H.264, yuv420p, 1920×1080, 30 fps, exactly 1,740 frames and
 58 seconds. FFmpeg decoded the entire file with no errors. The `moov` atom
@@ -41,13 +41,19 @@ through 36 and 54 seconds and finished at 58 seconds, with duration 58, decoded 
 error. At 390 CSS pixels the video fitted the page and no horizontal overflow
 occurred; playback continued. The viewport override was reset.
 
-Caddy configuration validated and reloaded. Foodfinder, Caddy and resume services
+Caddy configuration validated and reloaded. MealMint, Caddy and resume services
 remained active; health and resume returned 200, private unsigned API returned
-401. Public files are isolated in `/srv/foodfinder-public/demo/`. Local proof
+401. Public files are isolated in `/srv/mealmint-public/demo/`. Local proof
 screenshots: `.local/hosting/video/public-demo.png` and `public-demo-mobile.png`.
 
 Remaining external steps are a dedicated Telegram bot token, approved Swiggy
 access/staging checks, and the owner's legal/contact form submission. Codex
 authentication works now; no user interaction was required. Latest VM short
-sample showed ~329 MiB service peak, no service swap and 384 MiB available RAM.
+sample after migration showed ~352 MiB service peak, ~22 MiB service swap and 370 MiB available RAM.
 No upgrade is indicated by this sample; routine-use capacity remains unmeasured.
+
+## MealMint rename
+
+Source release `5078ba4` renamed the app, client identities, service/user and hosting paths. Fresh hosted Luna max captures were made on https://mealmint.parthkatiyar.xyz/ and the complete video was rendered again with MealMint branding, an M intro icon, new domain and new GitHub link. The hash/size above identify this rebranded version. Previous media are private historical artifacts; the old public MP4 was removed and its old-domain link redirects to the new one.
+
+Rebranded video playback finished at 58 seconds with no media error. Public page title/body contained MealMint and no previous product branding. New proof screenshots: `.local/hosting/mealmint-app.png` and `.local/hosting/mealmint-public-demo.png`.

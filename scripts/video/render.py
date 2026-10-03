@@ -100,7 +100,7 @@ def frame(t,scenes,captures):
     return im.convert('RGB')
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument('--captures',type=Path,default=ROOT/'.local/hosting/demo'); ap.add_argument('--output',type=Path,default=ROOT/'.local/hosting/video/mealmint-demo.mp4'); ap.add_argument('--preview',action='store_true'); ap.add_argument('--start',type=float,default=0); ap.add_argument('--duration',type=float,default=58); a=ap.parse_args()
+    ap=argparse.ArgumentParser(); ap.add_argument('--captures',type=Path,default=ROOT/'.local/hosting/mealmint-demo'); ap.add_argument('--output',type=Path,default=ROOT/'.local/hosting/video/mealmint-demo.mp4'); ap.add_argument('--preview',action='store_true'); ap.add_argument('--start',type=float,default=0); ap.add_argument('--duration',type=float,default=58); a=ap.parse_args()
     scenes=json.loads((Path(__file__).with_name('scenes.json')).read_text())
     captures={s['file']:Image.open(a.captures/s['file']).convert('RGB') for s in scenes}
     a.output.parent.mkdir(parents=True,exist_ok=True)

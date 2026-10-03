@@ -1,10 +1,10 @@
-# Foodfinder video brief for Sol 6.1
+# MealMint video brief for Sol 6.1
 
 2026-10-03. The user requests a polished MacBook-style product walkthrough: large pointer, text callouts and smooth motion. The subsequent instruction is to audit the app and prepare this brief for Sol 6.1 before rendering. The finished MP4 is now published; see `VIDEO_DELIVERY.md`. The storyboard below preserves the original brief.
 
 ## Creative direction
 
-Use a clean Mac-style browser window, rounded corners, subtle shadow and small traffic-light controls on a warm cream/sage background. Keep Foodfinder's orange/green identity. This should feel like a restrained product demonstration, with readable UI and one message at a time. No spinning 3D laptop, frantic camera movements or generic stock footage.
+Use a clean Mac-style browser window, rounded corners, subtle shadow and small traffic-light controls on a warm cream/sage background. Keep MealMint's orange/green identity. This should feel like a restrained product demonstration, with readable UI and one message at a time. No spinning 3D laptop, frantic camera movements or generic stock footage.
 
 Master: 1920 × 1080, 30 fps, approximately 55–60 seconds. Deliver H.264 MP4, yuv420p, faststart, and a small web poster. Playback must work without sound; no voiceover is needed by default. Use concise, large captions and ample contrast. Optional sound can be added later, using licensed/original audio only.
 
@@ -21,7 +21,7 @@ Use a 36–44 px arrow pointer with a dark outline and soft shadow. Move it with
 | 25–33 s | Select bundle → Check totals → exact approval plan → Approve | You approve the exact cart check | Focus consent; don't skip or imply automatic consent |
 | 33–43 s | Result shows ₹217.30 payable: items 218, delivery 24, charges 18.90, SAVE20 −43.60 | Compare what you'll actually pay | Focus price/components; show lowest among checked options |
 | 43–51 s | Settings shows agent-saved vegetarian preference and its source | Preferences that carry into your next chat | Large pointer to saved directive; demonstrate review |
-| 51–58 s | Closing brand card, domain and source link | Foodfinder · Web chat + Telegram adapter | Full window, restrained end fade |
+| 51–58 s | Closing brand card, domain and source link | MealMint · Web chat + Telegram adapter | Full window, restrained end fade |
 
 A natural demo prompt: “Remember that I prefer vegetarian lunches. Show one Veg thali and one Dal rice bowl from Everyday Kitchen together as one bundle under ₹250 delivered. Do not change the cart yet.” This is fictional QA input, not the owner's actual preference. Remove it from the live directive store after filming.
 
@@ -36,13 +36,13 @@ Do not film or include app access tokens, Codex credentials, DNS keys, phone/OTP
 ## Implementation plan
 
 1. Read `DEPLOYMENT_AUDIT.md`, `project-memory/CURRENT_STATE.md` and `NEXT_CHECKPOINT.md`. Verify hosted tool use before filming. Do not repeat the fixed incomplete-Codex-runtime installation.
-2. Capture a fresh successful hosted flow through the approved browser tools. Save safe screenshots/frames under ignored `.local/hosting/demo/`. Get actual visible control positions for pointer paths. Capture the full app first, then editorial crops. Avoid secrets/transcripts in Git.
+2. Capture a fresh successful hosted flow through the approved browser tools. Save safe screenshots/frames under ignored `.local/hosting/mealmint-demo/`. Get actual visible control positions for pointer paths. Capture the full app first, then editorial crops. Avoid secrets/transcripts in Git.
 3. Build an edited motion walkthrough from these real UI captures. A local FFmpeg/Python frame-composition pipeline is suitable: Mac window/background, rounded mask, captions, pointer paths/click rings, restrained zooms and transitions. Preserve a reproducible renderer plus scene timing/coordinate manifest in the repo. Rendering happens locally, never on the 1 GB VM.
 4. Validate MP4 using ffprobe, inspect representative frames at every scene/cut, play the video, check caption duration/contrast, pointer targets, aspect ratio and synthetic labels. Verify the final clip has no credentials or real account data.
-5. Publish only reviewed synthetic assets to `/srv/foodfinder-public/demo/`. A draft page exists at `deploy/public-demo/index.html`; it references `/demo/foodfinder-demo.mp4` and `/demo/05-result.png`. This original draft was subsequently deployed with the verified video; see the delivery record. Add a Caddy `/demo/*` static route only after those files exist; preserve the app proxy and existing resume site. Redirect `/demo` to `/demo/`.
-6. Check anonymous HTTPS access to both `/demo/` and `/demo/foodfinder-demo.mp4`, including video range requests and mobile playback. Provide a local downloadable file and public direct video URL. If the Google form rejects a self-hosted video, the user can upload that MP4 to Loom/YouTube/Drive with public viewing.
+5. Publish only reviewed synthetic assets to `/srv/mealmint-public/demo/`. A draft page exists at `deploy/public-demo/index.html`; it references `/demo/mealmint-demo.mp4` and `/demo/05-result.png`. This original draft was subsequently deployed with the verified video; see the delivery record. Add a Caddy `/demo/*` static route only after those files exist; preserve the app proxy and existing resume site. Redirect `/demo` to `/demo/`.
+6. Check anonymous HTTPS access to both `/demo/` and `/demo/mealmint-demo.mp4`, including video range requests and mobile playback. Provide a local downloadable file and public direct video URL. If the Google form rejects a self-hosted video, the user can upload that MP4 to Loom/YouTube/Drive with public viewing.
 7. Update `APPLICATION_PACKET.md` with the actual verified demo link, update durable project memory and push the renderer/brief/evidence records. Keep screenshots, video binaries, credentials and runtime data outside Git.
 
 ## Original captures and completion
 
-The original `.local/hosting/demo/01-start.png` and `02-request.png` are preparatory captures taken before the missing Codex companion was repaired. Do not treat them as a successful flow. The later hosted walkthrough passed; 03-shortlist.png, 04-approval.png, 05-result.png and 06-directives.png are successful safe captures. The completed video uses fresh captures taken after refining the pre-cart coupon wording; the earlier evidence remains historical. These demo filenames have since been refreshed for the final video. Existing `.local/screenshots/web-bundle.jpg` shows an earlier successful local flow; it isn't proof of remote deployment.
+The original `.local/hosting/mealmint-demo/01-start.png` and `02-request.png` are preparatory captures taken before the missing Codex companion was repaired. Do not treat them as a successful flow. The later hosted walkthrough passed; 03-shortlist.png, 04-approval.png, 05-result.png and 06-directives.png are successful safe captures. The completed video uses fresh captures taken after refining the pre-cart coupon wording; the earlier evidence remains historical. These demo filenames have since been refreshed for the final video. Existing `.local/screenshots/web-bundle.jpg` shows an earlier successful local flow; it isn't proof of remote deployment.

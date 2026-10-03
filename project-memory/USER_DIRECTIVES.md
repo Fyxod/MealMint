@@ -15,3 +15,5 @@ Clarification 2026-10-03: Luna max is the actual agent LLM for Codex-auth and Sw
 2026-10-03 video/review additions: Create a polished MacBook-style walkthrough with large pointer, explanatory text and smooth motion. The user then requested an audit and a concrete video brief for Sol 6.1 to implement after this review. Preserve the hosted deployment objective; do not portray a finished video or live Swiggy/Telegram integration before validation. Agent tests still use Luna max.
 
 2026-10-03 continuation: User now explicitly asks to create the video and complete any other pending work. This authorizes finished rendering/public demo publication rather than stopping at the review brief; preserve the private app and clearly label synthetic data.
+
+2026-10-03 rename: User requests MealMint everywhere, including code, website and hosting. This supersedes the Foodfinder identity, domain and earlier checkout/repo naming. Use /home/fyxod/Desktop/MealMint, public repo Fyxod/MealMint, mealmint.parthkatiyar.xyz, and migrate service/data paths without losing credentials or preferences. Preserve dated historical records; prior names there are historical provenance only.

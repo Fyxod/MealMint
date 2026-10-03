@@ -13,7 +13,7 @@ ffprobe -v error -show_streams -show_format .local/hosting/video/mealmint-demo.m
 ```
 
 Capture files are intentionally excluded from the public repo. Expected files in
-`.local/hosting/demo/`: `01-start.png`, `02-request.png`, `03-shortlist.png`,
+`.local/hosting/mealmint-demo/`: `01-start.png`, `02-request.png`, `03-shortlist.png`,
 `03-selected.png`, `04-approval.png`, `05-result.png`, `06-directives.png`.
 Capture only after sign-in, using the browser control tools; never include tokens,
 real account details or unrelated tabs. Remove fictional filming preferences.

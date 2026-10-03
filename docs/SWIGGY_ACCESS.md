@@ -9,8 +9,8 @@ The [developer guide](https://mcp.swiggy.com/builders/docs/start/developer/) sta
 This repository provides the web/Telegram prototype and local OAuth callback handler. The supplied Azure VM is deployed behind HTTPS. Current values:
 
 ```dotenv
-APP_ORIGIN=https://foodfinder.parthkatiyar.xyz
-SWIGGY_REDIRECT_URI=https://foodfinder.parthkatiyar.xyz/auth/swiggy/callback
+APP_ORIGIN=https://mealmint.parthkatiyar.xyz
+SWIGGY_REDIRECT_URI=https://mealmint.parthkatiyar.xyz/auth/swiggy/callback
 ```
 
 The URI is the destination for the authorization code and state. It is not a webhook or a token endpoint. This exact handler is reachable over public HTTPS; invalid/missing state is rejected. This does not establish completed Swiggy authorization. Local development uses `http://localhost:3000/auth/swiggy/callback`; localhost is unsuitable for the application form's production URI field.

@@ -7,20 +7,20 @@
 | Field | Recommended answer |
 | --- | --- |
 | Applicant type | Individual Developer |
-| Project | Foodfinder |
-| Code / portfolio | https://github.com/Fyxod/swiggy-mcp |
-| Application website | https://foodfinder.parthkatiyar.xyz/ (owner access token required) |
+| Project | MealMint |
+| Code / portfolio | https://github.com/Fyxod/MealMint |
+| Application website | https://mealmint.parthkatiyar.xyz/ (owner access token required) |
 | Server selection | Swiggy Food only |
 | Integration category | AI Agent / Copilot |
-| Production callback | https://foodfinder.parthkatiyar.xyz/auth/swiggy/callback |
+| Production callback | https://mealmint.parthkatiyar.xyz/auth/swiggy/callback |
 | Anticipated traffic | < 1K/day for the initial personal prototype |
-| Demo video | https://foodfinder.parthkatiyar.xyz/demo/foodfinder-demo.mp4 (public, no sign-in; 58 seconds, 1080p). Watch page: https://foodfinder.parthkatiyar.xyz/demo/ |
+| Demo video | https://mealmint.parthkatiyar.xyz/demo/mealmint-demo.mp4 (public, no sign-in; 58 seconds, 1080p). Watch page: https://mealmint.parthkatiyar.xyz/demo/ |
 
 Only the callback URI belongs in the redirect field. Do not paste a temporary OAuth authorization link, client ID, token endpoint or localhost URL. [Swiggy auth docs](https://mcp.swiggy.com/builders/docs/start/authenticate/) require exact matching HTTPS callbacks and support dynamic client registration.
 
 ## Project explanation — ready to paste
 
-Foodfinder is a personal AI food assistant available through web chat, with a private Telegram adapter. Users describe their delivery budget and food preferences. The agent searches relevant restaurants and dishes, inspects account-contextual coupons, and proposes same-restaurant item and quantity combinations that satisfy the request at a low delivered cost. This includes considering suitable small additions when they can unlock a coupon threshold and lower the actual total.
+MealMint is a personal AI food assistant available through web chat, with a private Telegram adapter. Users describe their delivery budget and food preferences. The agent searches relevant restaurants and dishes, inspects account-contextual coupons, and proposes same-restaurant item and quantity combinations that satisfy the request at a low delivered cost. This includes considering suitable small additions when they can unlock a coupon threshold and lower the actual total.
 
 The app separates listed subtotals from verified payable amounts. Before any cart mutation, it shows the exact item plan and requires explicit approval. The backend compares baseline pricing and eligible non-payment coupons independently, verifies the returned cart contents and payable amount, and clears the expected temporary test cart. Existing items require an additional discard confirmation. Ordering and payment tools are not exposed. Results are the cheapest among inspected combinations, not a guaranteed minimum across every restaurant.
 

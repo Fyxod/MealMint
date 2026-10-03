@@ -1,0 +1,6 @@
+# Keep previously shared links working after the MealMint rename.
+foodfinder.parthkatiyar.xyz {
+    @oldVideo path /demo/foodfinder-demo.mp4
+    redir @oldVideo https://mealmint.parthkatiyar.xyz/demo/mealmint-demo.mp4 308
+    redir https://mealmint.parthkatiyar.xyz{uri} 308
+}

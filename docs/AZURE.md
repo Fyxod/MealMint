@@ -1,6 +1,6 @@
 # Azure deployment preparation and current host
 
-Deployment update 2026-10-03: the supplied Azure VM now hosts Foodfinder at https://foodfinder.parthkatiyar.xyz/. See [actual deployment and audit](DEPLOYMENT_AUDIT.md) for paths, checks, repairs and current limits. The original preparation below is retained as general guidance. Use one Node process serving the compiled web app and API, one Codex app-server child, Telegram long polling and a Caddy TLS reverse proxy. A database, Docker and a separate OAuth relay are unnecessary for the personal prototype.
+Deployment update 2026-10-03: the supplied Azure VM now hosts MealMint at https://mealmint.parthkatiyar.xyz/. See [actual deployment and audit](DEPLOYMENT_AUDIT.md) for paths, checks, repairs and current limits. The original preparation below is retained as general guidance. Use one Node process serving the compiled web app and API, one Codex app-server child, Telegram long polling and a Caddy TLS reverse proxy. A database, Docker and a separate OAuth relay are unnecessary for the personal prototype.
 
 The model runs remotely; Luna max does not consume local model-weight memory. The local Node/Codex/helper process tree used about 269 MiB RSS after a chat and comparison; the short run does not measure peak load. See [measured validation](VALIDATION.md). A 1 GB / 2 vCPU VM is a reasonable starting point for one owner, not a confirmed capacity guarantee. Build on the developer machine or CI and transfer compiled files plus production dependencies. Avoid Vite/watch processes and concurrent builds on the small VM.
 
@@ -8,7 +8,7 @@ Once access is supplied, measure the systemd service's complete process tree dur
 
 ## Layout and environment
 
-Suggested layout: `/opt/swiggy-mcp` owned by a dedicated `swiggy` service user, `.env` mode 0600, `.local` mode 0700, Node 24+ and the complete matching Codex runtime on the service PATH. Codex 0.160.0 requires its codex-code-mode-host companion alongside the binary for the dynamic-tool flow. Copy the templates in `deploy/` only after replacing placeholders and verifying paths.
+Suggested layout: `/opt/mealmint` owned by a dedicated `swiggy` service user, `.env` mode 0600, `.local` mode 0700, Node 24+ and the complete matching Codex runtime on the service PATH. Codex 0.160.0 requires its codex-code-mode-host companion alongside the binary for the dynamic-tool flow. Copy the templates in `deploy/` only after replacing placeholders and verifying paths.
 
 ```dotenv
 HOST=127.0.0.1

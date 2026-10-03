@@ -2,7 +2,7 @@
 
 ## Current conclusion
 
-The hosted personal prototype at https://foodfinder.parthkatiyar.xyz/ works with real Codex gpt-6-luna/max and synthetic Swiggy data. It is not a fully validated real-Swiggy or Telegram integration. The requested video is in the planning/capture stage; `VIDEO_BRIEF.md` is the implementation handoff for Sol 6.1.
+The hosted personal prototype at https://mealmint.parthkatiyar.xyz/ works with real Codex gpt-6-luna/max and synthetic Swiggy data. It is not a fully validated real-Swiggy or Telegram integration. The finished edited video is documented in `VIDEO_DELIVERY.md`; the original creative brief is preserved in `VIDEO_BRIEF.md`.
 
 ## Checks and evidence
 
@@ -21,7 +21,7 @@ The hosted personal prototype at https://foodfinder.parthkatiyar.xyz/ works with
 | Automated checks | 73 tests/nine files, typecheck, dependency audit (zero known vulnerabilities), strict memory validation passed. Earlier public CI remains linked in `VALIDATION.md`. |
 | Capacity | After one real hosted chat/comparison: cgroup current 298,745,856 bytes, peak 342,274,048 bytes (about 285/326 MiB), service swap 6,123,520 bytes; OS available about 375 MiB. Three interval vmstat samples showed zero ongoing swap-in/out. Short check only, no load/peak guarantee. |
 
-Safe screenshot evidence is local-only: `.local/hosting/demo/03-shortlist.png`, `04-approval.png`, `05-result.png`, `06-directives.png`. Preparatory `01-start.png`/`02-request.png` precede the runtime repair and must not be presented as a successful end-to-end flow. Re-capture for the polished video.
+Safe screenshot evidence is local-only: `.local/hosting/mealmint-demo/03-shortlist.png`, `04-approval.png`, `05-result.png`, `06-directives.png`. Preparatory `01-start.png`/`02-request.png` precede the runtime repair and must not be presented as a successful end-to-end flow. Re-capture for the polished video.
 
 ## Repairs and valid negative results
 
@@ -33,14 +33,14 @@ The first hosted LLM reply couldn't use food tools although authentication worke
 
 ## Runtime and operations
 
-- Current release: `/opt/foodfinder/releases/4a9d4ff` (original deployment 7968d8e); `/opt/foodfinder/current` is its absolute symlink.
-- Node/Codex/companion: `/opt/foodfinder/runtime/bin/`.
-- Service: `foodfinder.service`, dedicated unprivileged owner, strict read-only system/home except its Codex directory and runtime state; localhost port 3000 behind Caddy. Public app token in protected `/etc/foodfinder/foodfinder.env` (0600).
-- Runtime state: `/var/lib/foodfinder`, linked as release `.local`; Swiggy tokens/directives encrypted, Codex CLI credentials in a protected owner-only file under `/home/foodfinder/.codex`.
-- Added 2 GiB swap at `/swapfile-foodfinder`, persistent fstab entry and swappiness 10. Service memory high/max 350/500 MiB, swap cap 1 GiB. No existing service stopped permanently, no VM reboot or unrelated OS upgrade.
+- Current release: `/opt/mealmint/releases/5078ba4` (original deployment 7968d8e); `/opt/mealmint/current` is its absolute symlink.
+- Node/Codex/companion: `/opt/mealmint/runtime/bin/`.
+- Service: `mealmint.service`, dedicated unprivileged owner, strict read-only system/home except its Codex directory and runtime state; localhost port 3000 behind Caddy. Public app token in protected `/etc/mealmint/mealmint.env` (0600).
+- Runtime state: `/var/lib/mealmint`, linked as release `.local`; Swiggy tokens/directives encrypted, Codex CLI credentials in a protected owner-only file under `/home/mealmint/.codex`.
+- Added 2 GiB swap at `/swapfile-mealmint`, persistent fstab entry and swappiness 10. Service memory high/max 350/500 MiB, swap cap 1 GiB. No existing service stopped permanently, no VM reboot or unrelated OS upgrade.
 - Local owner access token is saved under ignored `.local/hosting/app-access-token` (0600). Read it privately; do not paste into public docs or a demo. Rotate it through the VM environment if needed.
-- Safe deployed unit/Caddy templates are in `deploy/foodfinder.service` and `deploy/foodfinder.caddy`. DNS and prior Caddy configuration backups remain private on the VM.
-- For rollback, stop Foodfinder and remove only its Caddy include/reload. Preserve the existing main Caddy configuration/resume service. Future app releases should retain state/env, atomically replace `current`, restart, and pass authenticated Luna max and HTTPS/browser checks.
+- Safe deployed unit/Caddy templates are in `deploy/mealmint.service` and `deploy/mealmint.caddy`. DNS and prior Caddy configuration backups remain private on the VM.
+- For rollback, stop MealMint and remove only its Caddy include/reload. Preserve the existing main Caddy configuration/resume service. Future app releases should retain state/env, atomically replace `current`, restart, and pass authenticated Luna max and HTTPS/browser checks.
 
 ## Outstanding items for Sol / the owner
 
@@ -56,3 +56,9 @@ The first hosted LLM reply couldn't use food tools although authentication worke
 Current-cart coupon applicability wording was clarified in the prompt/tool note and deployed as `4a9d4ff`. All 73 tests, typecheck, build and dependency audit passed. Fresh hosted Luna max flow proposed the exact ₹218 bundle; approved comparison returned ₹217.30 with SAVE20, and the fictional preference was removed. Safe captures were refreshed for the final edited video.
 
 The public `/demo/` static route now serves only reviewed synthetic video, poster and explanatory HTML; the app API remains owner-protected. Full video decode and anonymous HTTPS/range checks passed. See `VIDEO_DELIVERY.md` for playback/publication evidence. Resume stayed 200. Latest post-chat service peak was 345,317,376 bytes (~329 MiB), service swap 0, VM available memory 384 MiB; this is still a short single-owner sample. No interactive Codex authentication or RAM upgrade was needed. Original outstanding items 1–2 above are completed; Telegram token, approved Swiggy access and future remote re-auth remain external/maintenance gates.
+
+## MealMint rename and migration — 2026-10-03
+
+The user requested MealMint everywhere. Repo is now Fyxod/MealMint and local checkout /home/fyxod/Desktop/MealMint. Domain is mealmint.parthkatiyar.xyz; current source runtime 5078ba4. Dedicated service/user, HOME, state/env/runtime/static directories and swap file were renamed to mealmint while retaining UID/GID, auth, encryption keys and runtime companions. The old active paths/unit were removed. Only the target DNS record was added, leaving other records intact. HTTPS and authenticated browser sign-in passed, actual Luna max proposed/remembered and approved the exact bundle for ₹217.30, and the fictional directive was removed. Private API remains 401 unsigned, callback without state 400, resume 200. No new authentication needed.
+
+The old domain redirects 308, including its former video filename; new public video/page use MealMint exclusively. Deployment tar hashes matched. Latest short sample after fresh chat: current 337,170,432 bytes, peak 368,947,200 bytes (~352 MiB), service swap 23,527,424 bytes, OS available 370 MiB. No crash/restart observed. This remains a short capacity sample. Old names in the history/legacy redirect and protected rollback backups are historical provenance, not active services.
