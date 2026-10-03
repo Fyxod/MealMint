@@ -2,7 +2,7 @@
 
 2026-10-03: Implementation started from an empty target directory. Git initialized on main. Codex CLI 0.160.0 is installed and reports ChatGPT login. Node 24.19.0 is available through the bundled desktop runtime; system Node 18 is too old.
 
-Shared backend, web chat, Telegram adapter, Codex provider, mock/live food gateways and Swiggy OAuth are implemented. Public repository: https://github.com/Fyxod/swiggy-mcp. Bootstrap commit 78bc815 is the previous public checkpoint; the implementation containing this record is ready for commit/push. Verify local/remote Git state before resuming.
+Shared backend, web chat, Telegram adapter, Codex provider, mock/live food gateways and Swiggy OAuth are implemented. Public repository: https://github.com/Fyxod/swiggy-mcp. Implementation commit `c8345eda13e405c668a75028774efe8d33826d01` is pushed to public main. [GitHub CI run 37117782107](https://github.com/Fyxod/swiggy-mcp/actions/runs/37117782107) completed successfully (clean install, typecheck, 73 tests, build, strict memory check and audit). Bootstrap 78bc815 is superseded. Verify local/remote Git state before resuming.
 
 Typecheck, production build and all 73 tests across nine files pass. Full npm audit reported zero known vulnerabilities. A real authenticated Codex gpt-6-luna/max food-tool loop passed against synthetic food data; the production-browser shortlist/approval/total flow passed, including exact bundles, coupon totals, directive Settings controls, final UI polish and a phone-width overflow check. Root wrote product code; Luna only verified tests. Evidence: repository paths `package.json`, `tests/`, `scripts/smoke-codex.ts`, `scripts/smoke-codex-advanced.ts`, `docs/VALIDATION.md` and [Sources](SOURCES.md). Strict memory validation passed.
 

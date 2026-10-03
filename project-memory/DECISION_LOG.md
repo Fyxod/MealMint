@@ -31,3 +31,7 @@ User added cheapest item/coupon combinations and agent-selected or explicitly re
 Encrypted runtime directives are shared by web/Telegram, serialized, deduplicated, capped and reviewable/deletable in Settings. Context refreshes each turn. They are separate from project/global Codex memory.
 
 Final 73 tests/nine files and typecheck passed. Actual Luna max advanced smoke saved a synthetic directive and proposed exact dosa/idli bundle at ₹108 without any approval/cart write. Root browser verified manual directive persistence/delete plus exact thali/rice bundle approval and ₹217.30 SAVE20 total. Evidence: repository `tests/`, `scripts/smoke-codex-advanced.ts`, `docs/VALIDATION.md`; synthetic browser screenshot remains ignored/local. Dependency audit remains zero known vulnerabilities. Implementation publication/CI is the next bounded checkpoint.
+
+## 2026-10-03 — Public implementation checkpoint
+
+Implementation commit `c8345eda13e405c668a75028774efe8d33826d01` was pushed to public main. [CI 37117782107](https://github.com/Fyxod/swiggy-mcp/actions/runs/37117782107) completed successfully with clean install, typecheck, 73 tests, build, memory validation and audit. Preview restarted from the final compiled source on localhost:3000, synthetic mode and Codex Luna max. External integrations remain pending; no user auth action was needed. This publication record is a separate memory follow-up, so its own commit does not imply another runtime change.

@@ -32,3 +32,7 @@ Standalone Codex smoke RSS: 106,820 KiB after account status and 164,364 KiB aft
 ## External limits
 
 No real Swiggy authorization, tool catalogue, menu units or cart was exercised. Telegram adapter tests use a fake fetcher; no real bot token was supplied or message sent. No Swiggy application has been submitted, no public demo video published and no Azure VM accessed. Hosting and HTTPS callback remain pending. The architecture disables order/payment tools, but local tests are not production security certification.
+
+## Published checkpoint
+
+Implementation `c8345eda13e405c668a75028774efe8d33826d01` is on public main. [GitHub CI run 37117782107](https://github.com/Fyxod/swiggy-mcp/actions/runs/37117782107) succeeded with npm ci, typecheck, all 73 tests, production build, strict memory validation and dependency audit. Authenticated LLM/browser checks remain local opt-in checks, not CI tests.
