@@ -13,3 +13,5 @@ Checked 2026-10-03:
 - [Telegram API](https://core.telegram.org/bots/api): long polling and inline callback buttons.
 
 Deployment/readiness evidence is maintained at repository `docs/DEPLOYMENT_AUDIT.md`; video and application handoffs at `docs/VIDEO_BRIEF.md` and `docs/APPLICATION_PACKET.md`. No secret values or legal identity data are included.
+
+Finished public video evidence is indexed at repository `docs/VIDEO_DELIVERY.md`: fresh actual hosted Luna max flow with synthetic data, full decode, anonymous public hash/range checks and browser playback. Media and proof screenshots remain ignored under `.local/hosting/`; no live Swiggy or Telegram claim.

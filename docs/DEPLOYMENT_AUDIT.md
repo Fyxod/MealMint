@@ -33,7 +33,7 @@ The first hosted LLM reply couldn't use food tools although authentication worke
 
 ## Runtime and operations
 
-- Release: `/opt/foodfinder/releases/7968d8e`; `/opt/foodfinder/current` is its absolute symlink.
+- Current release: `/opt/foodfinder/releases/4a9d4ff` (original deployment 7968d8e); `/opt/foodfinder/current` is its absolute symlink.
 - Node/Codex/companion: `/opt/foodfinder/runtime/bin/`.
 - Service: `foodfinder.service`, dedicated unprivileged owner, strict read-only system/home except its Codex directory and runtime state; localhost port 3000 behind Caddy. Public app token in protected `/etc/foodfinder/foodfinder.env` (0600).
 - Runtime state: `/var/lib/foodfinder`, linked as release `.local`; Swiggy tokens/directives encrypted, Codex CLI credentials in a protected owner-only file under `/home/foodfinder/.codex`.
@@ -50,3 +50,9 @@ The first hosted LLM reply couldn't use food tools although authentication worke
 4. Real Swiggy OAuth/MCP schema/price-unit/coupon/cart validation awaits access. Live writes remain disabled. Coordinate production data-processing requirements with Swiggy before passing real account context to the LLM.
 5. The hosted Connect Codex button uses CLI's localhost callback flow. Current session works and refresh is CLI-managed; future interactive VM re-authentication should use a supported device-code login as the service owner or an SSH-forwarded callback. A direct browser localhost link from the hosted app is not verified as a remote re-auth flow. Handle/communicate this clearly before offering multi-user sign-in.
 6. Continue measuring the whole VM under routine use. Current samples support one owner on 1 GB with swap/off-VM builds. Upgrade RAM if available headroom routinely drops below roughly 200 MiB, sustained swapping appears, or OOMs occur. Do not render video/build on this VM.
+
+## Video completion update — 2026-10-03
+
+Current-cart coupon applicability wording was clarified in the prompt/tool note and deployed as `4a9d4ff`. All 73 tests, typecheck, build and dependency audit passed. Fresh hosted Luna max flow proposed the exact ₹218 bundle; approved comparison returned ₹217.30 with SAVE20, and the fictional preference was removed. Safe captures were refreshed for the final edited video.
+
+The public `/demo/` static route now serves only reviewed synthetic video, poster and explanatory HTML; the app API remains owner-protected. Full video decode and anonymous HTTPS/range checks passed. See `VIDEO_DELIVERY.md` for playback/publication evidence. Resume stayed 200. Latest post-chat service peak was 345,317,376 bytes (~329 MiB), service swap 0, VM available memory 384 MiB; this is still a short single-owner sample. No interactive Codex authentication or RAM upgrade was needed. Original outstanding items 1–2 above are completed; Telegram token, approved Swiggy access and future remote re-auth remain external/maintenance gates.

@@ -1,4 +1,11 @@
 foodfinder.parthkatiyar.xyz {
     encode gzip zstd
-    reverse_proxy 127.0.0.1:3000
+    redir /demo /demo/ 308
+    handle /demo/* {
+        root * /srv/foodfinder-public
+        file_server
+    }
+    handle {
+        reverse_proxy 127.0.0.1:3000
+    }
 }

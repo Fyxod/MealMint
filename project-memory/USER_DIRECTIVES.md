@@ -13,3 +13,5 @@ Clarification 2026-10-03: Luna max is the actual agent LLM for Codex-auth and Sw
 2026-10-03 deployment authorization: Connect using local `droplet2`; use saved VM hosting/DNS credentials as needed; deploy at `foodfinder.parthkatiyar.xyz` and modify DNS for that deployment. Provide everything needed for the Swiggy Google form afterward. This supersedes the earlier hosting deferral. Keep secrets out of logs/Git.
 
 2026-10-03 video/review additions: Create a polished MacBook-style walkthrough with large pointer, explanatory text and smooth motion. The user then requested an audit and a concrete video brief for Sol 6.1 to implement after this review. Preserve the hosted deployment objective; do not portray a finished video or live Swiggy/Telegram integration before validation. Agent tests still use Luna max.
+
+2026-10-03 continuation: User now explicitly asks to create the video and complete any other pending work. This authorizes finished rendering/public demo publication rather than stopping at the review brief; preserve the private app and clearly label synthetic data.

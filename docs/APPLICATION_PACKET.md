@@ -14,7 +14,7 @@
 | Integration category | AI Agent / Copilot |
 | Production callback | https://foodfinder.parthkatiyar.xyz/auth/swiggy/callback |
 | Anticipated traffic | < 1K/day for the initial personal prototype |
-| Demo video | Pending production of the requested edited video. Planned `/demo/foodfinder-demo.mp4` must NOT be pasted until anonymously accessible and verified. |
+| Demo video | https://foodfinder.parthkatiyar.xyz/demo/foodfinder-demo.mp4 (public, no sign-in; 58 seconds, 1080p). Watch page: https://foodfinder.parthkatiyar.xyz/demo/ |
 
 Only the callback URI belongs in the redirect field. Do not paste a temporary OAuth authorization link, client ID, token endpoint or localhost URL. [Swiggy auth docs](https://mcp.swiggy.com/builders/docs/start/authenticate/) require exact matching HTTPS callbacks and support dynamic client registration.
 
@@ -38,4 +38,4 @@ The form includes separate acknowledgements for integration terms and accuracy/a
 
 ## Remaining review gates
 
-Publish and verify the requested demo video. Supply a dedicated Telegram bot token before claiming a working Telegram demonstration. Obtain staging access and validate real Swiggy integration. For production, confirm processing-region and agreement requirements with Swiggy: the [data-handling guide](https://mcp.swiggy.com/builders/docs/operate/data-and-compliance/) requires a signed DPA and transfer safeguards when MCP responses are processed outside India. This packet is a technical project description, not a claim of production compliance.
+The public demo video is published and verified. Supply a dedicated Telegram bot token before claiming a working Telegram demonstration. Obtain staging access and validate real Swiggy integration. For production, confirm processing-region and agreement requirements with Swiggy: the [data-handling guide](https://mcp.swiggy.com/builders/docs/operate/data-and-compliance/) requires a signed DPA and transfer safeguards when MCP responses are processed outside India. This packet is a technical project description, not a claim of production compliance.

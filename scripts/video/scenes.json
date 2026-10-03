@@ -1,0 +1,247 @@
+[
+  {
+    "start": 4,
+    "end": 7,
+    "file": "01-start.png",
+    "caption": "Start with your budget and preferences.",
+    "sub": "Choose a saved delivery location.",
+    "pointer": [
+      [
+        0,
+        900,
+        560
+      ],
+      [
+        1.4,
+        370,
+        116
+      ],
+      [
+        2.7,
+        370,
+        116
+      ]
+    ],
+    "clicks": [
+      1.8
+    ]
+  },
+  {
+    "start": 7,
+    "end": 11,
+    "file": "02-request.png",
+    "caption": "Say what sounds good.",
+    "sub": "Vegetarian lunch. Two dishes. ₹250 delivered.",
+    "zoom": 1.1,
+    "focus": [
+      0.43,
+      0.63
+    ],
+    "pointer": [
+      [
+        0,
+        370,
+        116
+      ],
+      [
+        1.5,
+        480,
+        612
+      ],
+      [
+        2.8,
+        725,
+        651
+      ],
+      [
+        3.8,
+        725,
+        651
+      ]
+    ],
+    "clicks": [
+      3.2
+    ]
+  },
+  {
+    "start": 11,
+    "end": 18,
+    "file": "03-shortlist.png",
+    "caption": "One conversation. Useful combinations.",
+    "sub": "The agent searches and remembers the requested preference. Waiting condensed.",
+    "pointer": [
+      [
+        0,
+        725,
+        651
+      ],
+      [
+        2,
+        603,
+        390
+      ],
+      [
+        6.5,
+        603,
+        390
+      ]
+    ]
+  },
+  {
+    "start": 18,
+    "end": 23,
+    "file": "03-shortlist.png",
+    "caption": "Listed prices are the starting point.",
+    "sub": "One veg thali + one dal rice bowl · ₹218 before delivery, fees and coupons.",
+    "zoom": 1.13,
+    "focus": [
+      0.78,
+      0.4
+    ],
+    "pointer": [
+      [
+        0,
+        603,
+        390
+      ],
+      [
+        1.5,
+        1040,
+        345
+      ],
+      [
+        4.7,
+        1040,
+        345
+      ]
+    ],
+    "clicks": [
+      4.6
+    ]
+  },
+  {
+    "start": 23,
+    "end": 26,
+    "file": "03-selected.png",
+    "caption": "Check the delivered total.",
+    "sub": "Pick the exact bundle you want to compare.",
+    "pointer": [
+      [
+        0,
+        1040,
+        345
+      ],
+      [
+        1.4,
+        1157,
+        624
+      ],
+      [
+        2.9,
+        1157,
+        624
+      ]
+    ],
+    "clicks": [
+      2.65
+    ]
+  },
+  {
+    "start": 26,
+    "end": 33,
+    "file": "04-approval.png",
+    "caption": "You approve the exact cart check.",
+    "sub": "Review the items and quantities before the temporary comparison.",
+    "zoom": 1.16,
+    "focus": [
+      0.5,
+      0.5
+    ],
+    "pointer": [
+      [
+        0,
+        1000,
+        624
+      ],
+      [
+        2.2,
+        667,
+        375
+      ],
+      [
+        4.8,
+        762,
+        505
+      ],
+      [
+        6.9,
+        762,
+        505
+      ]
+    ],
+    "clicks": [
+      6.6
+    ]
+  },
+  {
+    "start": 33,
+    "end": 43,
+    "file": "05-result.png",
+    "caption": "Compare what you’ll actually pay.",
+    "sub": "₹217.30 in this synthetic example · SAVE20 applied · test cart cleared.",
+    "zoom": 1.14,
+    "focus": [
+      0.76,
+      0.43
+    ],
+    "pointer": [
+      [
+        0,
+        762,
+        505
+      ],
+      [
+        2,
+        1098,
+        320
+      ],
+      [
+        5,
+        1098,
+        412
+      ],
+      [
+        9.5,
+        1098,
+        412
+      ]
+    ]
+  },
+  {
+    "start": 43,
+    "end": 51,
+    "file": "06-directives.png",
+    "caption": "Preferences that carry into your next chat.",
+    "sub": "Saved at your request. Review or forget them in Settings.",
+    "pointer": [
+      [
+        0,
+        1220,
+        50
+      ],
+      [
+        2,
+        638,
+        490
+      ],
+      [
+        7.5,
+        638,
+        490
+      ]
+    ],
+    "clicks": [
+      0.2
+    ]
+  }
+]
