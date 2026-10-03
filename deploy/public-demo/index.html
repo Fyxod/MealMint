@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Foodfinder — prototype walkthrough</title>
+    <meta
+      name="description"
+      content="A Codex-powered food assistant prototype that explores affordable meals and coupon combinations, with explicit cart approval."
+    />
+    <style>
+      :root {
+        font-family: system-ui, sans-serif;
+        color: #243a29;
+        background: #f4f5ec;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      main {
+        max-width: 1020px;
+        margin: auto;
+        padding: 48px 24px;
+      }
+      nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 48px;
+      }
+      nav a,
+      footer a {
+        color: #355b39;
+      }
+      .brand {
+        font-size: 22px;
+        font-weight: 750;
+      }
+      .badge {
+        font-size: 12px;
+        background: #fff4da;
+        color: #85611a;
+        padding: 7px 12px;
+        border: 1px solid #e4dabb;
+        border-radius: 6px;
+      }
+      h1 {
+        font-size: clamp(32px, 6vw, 54px);
+        letter-spacing: -2px;
+        line-height: 1.08;
+        max-width: 720px;
+        margin: 20px 0;
+      }
+      p {
+        line-height: 1.7;
+        max-width: 780px;
+        color: #526454;
+      }
+      video {
+        width: 100%;
+        display: block;
+        background: #edf0e7;
+        border-radius: 14px;
+        border: 1px solid #d9dfd1;
+        margin: 28px 0 12px;
+      }
+      .small {
+        font-size: 13px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        margin: 40px 0;
+      }
+      h2 {
+        font-size: 18px;
+      }
+      code {
+        overflow-wrap: anywhere;
+        font-size: 12px;
+      }
+      footer {
+        border-top: 1px solid #d9dfd1;
+        padding-top: 24px;
+        font-size: 13px;
+        line-height: 1.8;
+      }
+      .links {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+      @media (max-width: 650px) {
+        main {
+          padding: 25px 20px;
+        }
+        nav {
+          margin-bottom: 30px;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+        h1 {
+          letter-spacing: -1px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav>
+        <span class="brand">🍽 foodfinder</span
+        ><span class="badge">SYNTHETIC FOOD DATA</span>
+      </nav>
+      <h1>Good food.<br />A smaller bill.</h1>
+      <p>
+        Tell a food assistant your budget and preferences. It explores dishes
+        and offers, proposes useful item combinations, and checks delivered
+        totals after you approve the exact cart plan.
+      </p>
+      <video controls preload="metadata" poster="/demo/05-result.png">
+        <source src="/demo/foodfinder-demo.mp4" type="video/mp4" />
+        Your browser does not support video.
+        <a href="/demo/foodfinder-demo.mp4">Download the walkthrough.</a>
+      </video>
+      <p class="small">
+        Recorded prototype walkthrough with actual Codex
+        <strong>gpt-6-luna at max effort</strong> on the hosted service. Swiggy
+        menus, offers and cart prices in this demonstration are synthetic. No
+        real order or payment is placed.
+      </p>
+      <div class="grid">
+        <section>
+          <h2>Chat about your meal</h2>
+          <p class="small">
+            Choose a saved delivery location, describe what you need, and let
+            the agent explore suitable dishes and combinations.
+          </p>
+        </section>
+        <section>
+          <h2>Approve a price check</h2>
+          <p class="small">
+            Review the exact items and quantities. The backend compares the
+            baseline and eligible coupons, then reports the lowest payable
+            snapshot among checked options.
+          </p>
+        </section>
+        <section>
+          <h2>Remember preferences</h2>
+          <p class="small">
+            Ask the agent to remember a stable directive, or let it save a
+            useful recurring preference. Review and delete saved directives in
+            Settings.
+          </p>
+        </section>
+      </div>
+      <footer>
+        <p>
+          Personal prototype: the private app uses an owner access token. Web
+          chat is hosted; the Telegram adapter is implemented and awaits a
+          dedicated bot token. Official Swiggy OAuth and MCP transport are
+          implemented; real account and cart validation await approved access.
+          Search and coupon trials are bounded, so this is not a guarantee of
+          the cheapest cart across every restaurant.
+        </p>
+        <div class="links">
+          <a href="/">Open private app</a
+          ><a href="https://github.com/Fyxod/swiggy-mcp">Public source code</a
+          ><a href="/demo/foodfinder-demo.mp4">Direct video link</a>
+        </div>
+        <p>
+          Swiggy OAuth callback:<br /><code
+            >https://foodfinder.parthkatiyar.xyz/auth/swiggy/callback</code
+          >
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

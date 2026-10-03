@@ -6,16 +6,16 @@ The [developer guide](https://mcp.swiggy.com/builders/docs/start/developer/) sta
 
 ## Prototype and public callback
 
-This repository provides the web/Telegram prototype and local OAuth callback handler. Once Azure access and a domain are supplied, deploy behind HTTPS and set:
+This repository provides the web/Telegram prototype and local OAuth callback handler. The supplied Azure VM is deployed behind HTTPS. Current values:
 
 ```dotenv
-APP_ORIGIN=https://YOUR_DOMAIN
-SWIGGY_REDIRECT_URI=https://YOUR_DOMAIN/auth/swiggy/callback
+APP_ORIGIN=https://foodfinder.parthkatiyar.xyz
+SWIGGY_REDIRECT_URI=https://foodfinder.parthkatiyar.xyz/auth/swiggy/callback
 ```
 
-The URI is the destination for the authorization code and state. It is not a webhook or a token endpoint. Do not invent a production URL before deployment. Local development uses `http://localhost:3000/auth/swiggy/callback`; localhost is unsuitable for the application form's production URI field.
+The URI is the destination for the authorization code and state. It is not a webhook or a token endpoint. This exact handler is reachable over public HTTPS; invalid/missing state is rejected. This does not establish completed Swiggy authorization. Local development uses `http://localhost:3000/auth/swiggy/callback`; localhost is unsuitable for the application form's production URI field.
 
-Record a short public demo using synthetic data, explicitly labelled. Show budget/preferences in chat, saved address selection, discovery, shortlist, approval, delivered-total comparison and Telegram interaction. A synthetic demo proves the prototype flow, not live access. Include the public repository URL, deployment URL, exact callback URI and honest staging requirements in the application. Application submission and public video publication are still pending.
+Record a short public demo using synthetic data, explicitly labelled. Show budget/preferences in chat, saved address selection, discovery, shortlist, approval, delivered-total comparison and Telegram interaction. A synthetic demo proves the prototype flow, not live access. Include the public repository URL, deployment URL, exact callback URI and honest staging requirements in the application. Application submission and public video publication are still pending. The current form’s public metadata was re-inspected; prepared technical and owner-only legal fields are indexed in [the application packet](APPLICATION_PACKET.md).
 
 ## Staging validation before live writes
 

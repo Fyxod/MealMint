@@ -31,8 +31,12 @@ Standalone Codex smoke RSS: 106,820 KiB after account status and 164,364 KiB aft
 
 ## External limits
 
-No real Swiggy authorization, tool catalogue, menu units or cart was exercised. Telegram adapter tests use a fake fetcher; no real bot token was supplied or message sent. No Swiggy application has been submitted, no public demo video published and no Azure VM accessed. Hosting and HTTPS callback remain pending. The architecture disables order/payment tools, but local tests are not production security certification.
+At the original local checkpoint, no real Swiggy authorization, tool catalogue, menu units or cart was exercised. Telegram adapter tests use a fake fetcher; no real bot token was supplied or message sent. At that checkpoint, no Swiggy application had been submitted, public demo video published or Azure VM accessed. The later deployment update below supersedes the hosting/callback deferral; real Swiggy, Telegram and video gates remain pending. The architecture disables order/payment tools, but local tests are not production security certification.
 
 ## Published checkpoint
 
 Implementation `c8345eda13e405c668a75028774efe8d33826d01` is on public main. [GitHub CI run 37117782107](https://github.com/Fyxod/swiggy-mcp/actions/runs/37117782107) succeeded with npm ci, typecheck, all 73 tests, production build, strict memory validation and dependency audit. Authenticated LLM/browser checks remain local opt-in checks, not CI tests.
+
+## Azure deployment audit update
+
+The supplied VM now serves https://foodfinder.parthkatiyar.xyz/ behind valid HTTPS. The remote runtime initially lacked Codex’s code-mode companion; that defect and a pre-existing Caddy ACME ownership problem were repaired. Actual Luna max food-tool dispatch and hosted browser bundle/approval/₹217.30 mock total passed. A saved fictional directive survived a service restart and was deleted afterward. Access controls and callback state rejection passed; the existing resume site remained 200. Service cgroup peak was about 326 MiB after one chat/comparison, with about 375 MiB OS available and no ongoing swap activity in short samples. Full evidence and limits: [deployment audit](DEPLOYMENT_AUDIT.md). No finished video, live Swiggy or real Telegram success is claimed.

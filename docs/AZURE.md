@@ -1,14 +1,14 @@
-# Azure deployment preparation
+# Azure deployment preparation and current host
 
-No VM has been accessed or deployed yet. Use one Node process serving the compiled web app and API, one Codex app-server child, Telegram long polling and a Caddy TLS reverse proxy. A database, Docker and a separate OAuth relay are unnecessary for the personal prototype.
+Deployment update 2026-10-03: the supplied Azure VM now hosts Foodfinder at https://foodfinder.parthkatiyar.xyz/. See [actual deployment and audit](DEPLOYMENT_AUDIT.md) for paths, checks, repairs and current limits. The original preparation below is retained as general guidance. Use one Node process serving the compiled web app and API, one Codex app-server child, Telegram long polling and a Caddy TLS reverse proxy. A database, Docker and a separate OAuth relay are unnecessary for the personal prototype.
 
 The model runs remotely; Luna max does not consume local model-weight memory. The local Node/Codex/helper process tree used about 269 MiB RSS after a chat and comparison; the short run does not measure peak load. See [measured validation](VALIDATION.md). A 1 GB / 2 vCPU VM is a reasonable starting point for one owner, not a confirmed capacity guarantee. Build on the developer machine or CI and transfer compiled files plus production dependencies. Avoid Vite/watch processes and concurrent builds on the small VM.
 
-Once access is supplied, measure the systemd service's complete process tree during repeated chats and comparisons, plus OS/proxy usage. Keep headroom for spikes. If the service/OS cannot leave about 200 MB available, the kernel kills processes, or routine chat causes sustained swapping, upgrade to 2 GB rather than relying on swap. A modest swap file can absorb brief spikes; it does not replace active RAM. No swap changes have been made here.
+Once access is supplied, measure the systemd service's complete process tree during repeated chats and comparisons, plus OS/proxy usage. Keep headroom for spikes. If the service/OS cannot leave about 200 MB available, the kernel kills processes, or routine chat causes sustained swapping, upgrade to 2 GB rather than relying on swap. A modest swap file can absorb brief spikes; it does not replace active RAM. The deployment added a 2 GiB swap buffer with swappiness 10; measured capacity is recorded in the audit.
 
 ## Layout and environment
 
-Suggested layout: `/opt/swiggy-mcp` owned by a dedicated `swiggy` service user, `.env` mode 0600, `.local` mode 0700, Node 24+ and Codex CLI on the service PATH. Copy the templates in `deploy/` only after replacing placeholders and verifying paths.
+Suggested layout: `/opt/swiggy-mcp` owned by a dedicated `swiggy` service user, `.env` mode 0600, `.local` mode 0700, Node 24+ and the complete matching Codex runtime on the service PATH. Codex 0.160.0 requires its codex-code-mode-host companion alongside the binary for the dynamic-tool flow. Copy the templates in `deploy/` only after replacing placeholders and verifying paths.
 
 ```dotenv
 HOST=127.0.0.1
