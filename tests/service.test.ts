@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MockFoodGateway } from '../src/mock.js';
 import { FoodService } from '../src/service.js';
-import type { AgentProvider } from '../src/types.js';
+import type { AgentProvider, FoodGateway } from '../src/types.js';
 
 function idleAgent(): AgentProvider {
   return {
@@ -513,5 +513,24 @@ describe('FoodService', () => {
     release();
     await pending;
     expect(service.conversations.has(conversation.id)).toBe(true);
+  });
+});
+
+describe('live address adaptation (synthetic account fixtures)', () => {
+  it('maps documented address fields, follows pages and refreshes account state', async () => {
+    const gateway: FoodGateway = new MockFoodGateway();
+    const call = vi.spyOn(gateway, 'call');
+    call.mockResolvedValueOnce({ addresses: [{ id: 'synthetic-home', addressTag: 'Home', addressLine: 'Synthetic address', phoneNumber: 'not-for-agent' }], pagination: { hasMore: true } });
+    call.mockResolvedValueOnce({ addresses: [{ id: 'synthetic-office', addressCategory: 'Office', addressLine: 'Synthetic office' }], pagination: { hasMore: false } });
+    const service = new FoodService(gateway, idleAgent());
+    expect(await service.addresses()).toEqual([
+      { id: 'synthetic-home', label: 'Home', display: 'Synthetic address' },
+      { id: 'synthetic-office', label: 'Office', display: 'Synthetic office' }
+    ]);
+    expect(call).toHaveBeenNthCalledWith(2, 'get_addresses', { page: 2, pageSize: 10 });
+    call.mockResolvedValueOnce({ addresses: [], pagination: { hasMore: false } });
+    expect(await service.addresses()).toEqual([]);
+    call.mockRejectedValueOnce(new Error('Connect Swiggy first.'));
+    await expect(service.addresses()).rejects.toThrow('Connect Swiggy first.');
   });
 });

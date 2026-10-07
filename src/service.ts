@@ -189,7 +189,6 @@ export function qualifies(c: Candidate, r: MealRequest) {
 export class FoodService extends EventEmitter {
   readonly conversations = new Map<string, Conversation>();
   private registries = new Map<string, Map<string, Candidate>>();
-  private addressesCache: Address[] | null = null;
   private reads = new Map<string, number>();
   private cartBusy = false;
   private cancelled = new Set<string>();
@@ -262,25 +261,27 @@ export class FoodService extends EventEmitter {
     this.emit("event", { type: "status", conversationId: c.id, text });
     this.changed(c);
   }
-  async addresses(refresh = false) {
-    if (!this.addressesCache || refresh) {
-      const raw = await this.gateway.call("get_addresses", {});
-      const data = Array.isArray(raw)
-        ? raw
-        : (raw.addresses ?? raw.data?.addresses ?? raw.data);
+  async addresses() {
+    // Fetch fresh account state; never keep addresses from a previous sign-in.
+    const addresses = new Map<string, Address>();
+    for (let page = 1; page <= 10; page++) {
+      const raw = await this.gateway.call("get_addresses", { page, pageSize: 10 });
+      const payload = raw?.data ?? raw;
+      const data = Array.isArray(payload) ? payload : payload?.addresses;
       if (!Array.isArray(data))
-        throw new Error(
-          "Unsupported address response. Validate the live schema.",
-        );
-      this.addressesCache = data
-        .map((a: any) => ({
-          id: String(a.id ?? a.addressId ?? ""),
-          label: String(a.label ?? a.annotation ?? "Saved address"),
-          display: String(a.display ?? a.displayText ?? a.address ?? ""),
-        }))
-        .filter((a: Address) => a.id);
+        throw new Error("Unsupported address response. Validate the live schema.");
+      for (const a of data) {
+        const id = String(a.id ?? a.addressId ?? "");
+        if (!id) continue;
+        addresses.set(id, {
+          id,
+          label: String(a.addressTag || a.addressCategory || a.label || a.annotation || "Saved address"),
+          display: String(a.addressLine ?? a.display ?? a.displayText ?? a.address ?? ""),
+        });
+      }
+      if (payload?.pagination?.hasMore !== true) return [...addresses.values()];
     }
-    return this.addressesCache;
+    throw new Error("Too many address pages. Please reduce saved addresses in Swiggy before continuing.");
   }
   async selectAddress(id: string, addressId: string) {
     const c = this.get(id);

@@ -848,10 +848,10 @@ export function App() {
                 <small>{status?.swiggy?.detail ?? "Synthetic demo data"}</small>
               </div>
               <button
-                disabled={connecting || source === "mock"}
+                disabled={connecting || source === "mock" || status?.swiggy?.connected}
                 onClick={() => void connect("swiggy")}
               >
-                {source === "mock" ? "Demo mode" : "Connect"}
+                {source === "mock" ? "Demo mode" : status?.swiggy?.connected ? "Connected" : "Connect"}
               </button>
             </div>
             <div className="setting-row">
