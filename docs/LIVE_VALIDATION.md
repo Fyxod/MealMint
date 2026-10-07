@@ -19,3 +19,9 @@ Raw account responses and schema probes are private, mode 0600, under `/var/lib/
 ## Remaining checks
 
 Rerun the user's actual food search after the adapter deployment. Verify item/quantity identity, price units, coupon discounts and cleanup through a concretely approved cart comparison before claiming live quotes validated. Telegram still needs a dedicated BotFather token and real private-chat pairing. Live writes remain disabled during read validation.
+
+## 2026-10-08 continuation
+
+The actual Luna max search published six real options after the adapter fix. Its final explanation hit the 180-second deadline; runtime allowance was increased to 300 seconds. Telegram address callback identity is now frozen with an expiring nonce, independent of fresh Swiggy address ordering. Typecheck, 77 tests and production build passed.
+
+Owner supplied a dedicated Telegram token and explicitly authorized modifying/clearing the account cart for bounded tests. The initial quote gate may be opened for this controlled owner-approved validation; that configuration alone is not evidence of correct delivered totals. Record actual quote/coupon/cleanup outcomes below before claiming success. Credentials and private account choices remain outside this document.

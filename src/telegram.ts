@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { FoodService } from "./service.js";
-import type { Conversation } from "./types.js";
+import type { Address, Conversation } from "./types.js";
 import { SecretStore, redact, safeEqual } from "./security.js";
 
 export class TelegramBot {
@@ -11,6 +11,7 @@ export class TelegramBot {
   private conversations = new Map<number, string>();
   private abort: AbortController | null = null;
   private username: string | null = null;
+  private addressMenu: { nonce: string; choices: Address[]; expiresAt: number } | null = null;
   constructor(
     private token: string,
     private service: FoodService,
@@ -156,8 +157,13 @@ export class TelegramBot {
       });
       const data: string = update.callback_query.data ?? "";
       if (data.startsWith("address:")) {
-        const addresses = await this.service.addresses();
-        const a = addresses[Number(data.slice(8))];
+        const [, nonce, index] = data.split(":");
+        const menu = this.addressMenu;
+        if (!menu || menu.expiresAt < Date.now() || !safeEqual(nonce ?? "", menu.nonce) || !/^\d+$/.test(index ?? "")) {
+          await this.send(chat, "Address choices expired. Use /addresses again.");
+          return;
+        }
+        const a = menu.choices[Number(index)];
         if (!a) return;
         await this.service.selectAddress(c.id, a.id);
         await this.send(
@@ -199,13 +205,15 @@ export class TelegramBot {
     }
     if (text === "/addresses") {
       const addresses = await this.service.addresses();
+      const nonce = randomBytes(6).toString("base64url");
+      this.addressMenu = { nonce, choices: addresses, expiresAt: Date.now() + 300000 };
       await this.send(
         chat,
         addresses.length
           ? "Choose a saved delivery address:"
           : "No saved addresses. Add one in Swiggy first.",
         addresses.map((a, i) => [
-          { text: a.label, callback_data: `address:${i}` },
+          { text: `${a.label}${a.display ? " — " + a.display : ""}`.slice(0, 100), callback_data: `address:${nonce}:${i}` },
         ]),
       );
       return;
@@ -220,6 +228,7 @@ export class TelegramBot {
       }
       this.service.remove(c.id);
       this.conversations.delete(chat);
+      this.addressMenu = null;
       await this.send(chat, "New conversation. Use /addresses first.");
       return;
     }

@@ -344,7 +344,7 @@ export class CodexProvider implements AgentProvider {
         void this.cancel(id);
         this.turns.delete(threadId!);
         reject(new Error("Search timed out. Narrow the request or try again."));
-      }, 180000);
+      }, 300000);
       this.turns.set(threadId!, {
         emit,
         dispatch,

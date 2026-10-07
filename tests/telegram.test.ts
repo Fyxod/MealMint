@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MockFoodGateway } from '../src/mock.js';
 import { FoodService } from '../src/service.js';
 import { SecretStore } from '../src/security.js';
@@ -93,6 +93,10 @@ describe('TelegramBot', () => {
     return code;
   }
 
+  function addressCallback(runtime: ReturnType<typeof createBot>) {
+    return runtime.calls.filter(call => call.method === 'sendMessage' && call.body.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data?.startsWith('address:')).at(-1)!.body.reply_markup.inline_keyboard[0][0].callback_data;
+  }
+
   async function waitFor(predicate: () => boolean) {
     for (let i = 0; i < 100; i++) {
       if (predicate()) return;
@@ -137,12 +141,12 @@ describe('TelegramBot', () => {
     await pair(runtime);
     await runtime.bot.handle(message(ownerId, '/addresses'));
     const addressMenu = runtime.calls.filter(call => call.method === 'sendMessage').at(-1)!;
-    expect(addressMenu.body.reply_markup.inline_keyboard).toEqual([
-      [{ text: 'Home', callback_data: 'address:0' }],
-      [{ text: 'Office', callback_data: 'address:1' }]
-    ]);
+    const buttons = addressMenu.body.reply_markup.inline_keyboard;
+    expect(buttons[0][0].text).toMatch(/^Home/);
+    expect(buttons[1][0].text).toMatch(/^Office/);
+    expect(buttons[0][0].callback_data).toMatch(/^address:[A-Za-z0-9_-]+:0$/);
 
-    await runtime.bot.handle(callback(ownerId, 'address:0'));
+    await runtime.bot.handle(callback(ownerId, addressCallback(runtime)));
     const conversation = [...runtime.service.conversations.values()][0];
     expect(conversation.channel).toBe('telegram');
     expect(conversation.request.addressId).toBe('mock-home');
@@ -173,11 +177,27 @@ describe('TelegramBot', () => {
     expect(stillThere.data.items[0].menu_item_id).toBe('i4');
   });
 
+  it('keeps the observed address identity when the saved list reorders and rejects stale menus', async () => {
+    const runtime = createBot();
+    await pair(runtime);
+    await runtime.bot.handle(message(ownerId, '/addresses'));
+    const oldChoice = addressCallback(runtime);
+    const addresses = await runtime.service.addresses();
+    vi.spyOn(runtime.service, 'addresses').mockResolvedValue([...addresses].reverse());
+    await runtime.bot.handle(callback(ownerId, oldChoice));
+    const conversation = [...runtime.service.conversations.values()][0];
+    expect(conversation.request.addressId).toBe('mock-home');
+    await runtime.bot.handle(message(ownerId, '/addresses'));
+    await runtime.bot.handle(callback(ownerId, oldChoice));
+    expect(conversation.request.addressId).toBe('mock-home');
+    expect(runtime.calls.at(-1)?.body.text).toContain('Address choices expired');
+  });
+
   it('completes an approved callback after the user empties their existing cart', async () => {
     const runtime = createBot();
     await pair(runtime);
     await runtime.bot.handle(message(ownerId, '/addresses'));
-    await runtime.bot.handle(callback(ownerId, 'address:0'));
+    await runtime.bot.handle(callback(ownerId, addressCallback(runtime)));
     const conversation = [...runtime.service.conversations.values()][0];
     runtime.service.updatePreferences(conversation.id, { budget: 200, diet: 'veg' });
     const search = await runtime.service.dispatch(conversation.id, 'food_search', { query: 'thali' });

@@ -15,3 +15,5 @@ Checked 2026-10-03:
 Deployment/readiness evidence is maintained at repository `docs/DEPLOYMENT_AUDIT.md`; video and application handoffs at `docs/VIDEO_BRIEF.md` and `docs/APPLICATION_PACKET.md`. No secret values or legal identity data are included.
 
 Finished public video evidence is indexed at repository `docs/VIDEO_DELIVERY.md`: fresh actual hosted Luna max flow with synthetic data, full decode, anonymous public hash/range checks and browser playback. Media and proof screenshots remain ignored under `.local/hosting/`; no live Swiggy or Telegram claim.
+
+2026-10-07: User-supplied approval email plus completed owner OAuth supersede the application gate. Read-only production `tools/list`, address, search, categorized menu, coupon and current-cart probes revealed differences from the reference docs. See repository `docs/LIVE_VALIDATION.md`; raw account data stays protected on the VM. Live price comparisons are not established by schema inspection alone.
