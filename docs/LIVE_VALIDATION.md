@@ -1,0 +1,21 @@
+# Live integration validation — 2026-10-07
+
+The owner supplied Swiggy's approval email and completed the official consent/OTP flow. Production callback remains `https://mealmint.parthkatiyar.xyz/auth/swiggy/callback`. Hosted mode is now live; Codex remains `gpt-6-luna` with max reasoning. No new Codex authentication was needed.
+
+## Confirmed against the authenticated gateway
+
+- OAuth registration, PKCE callback and encrypted token persistence succeeded. Hosted `/api/status` confirms connected after restart.
+- `tools/list` returned 20 tools. MealMint continues to allow only its nine discovery/cart tools; no payment, order, address mutation or reporting tools.
+- `get_addresses` returned seven addresses. Actual fields are `addressLine`, `addressCategory`, `addressTag`; mapping, pagination and fresh fetching replace the old indefinite address cache. No phone numbers enter the app address model.
+- Live `search_restaurants` returned open restaurants with an empty dish list. The initial actual Luna max search therefore could not produce candidates. Fixed by joining `search_menu` results to observed open restaurant metadata, retaining fail-closed availability checks.
+- `get_restaurant_menu` returns paginated `categories[].items`, rather than the flat documented format. The adapter accepts both, exposes category pagination and reports incomplete coverage.
+- Current live `search_restaurants` input schema has no `collection` property. The unsupported budget storefront filter is rejected explicitly rather than claiming it scoped the search.
+- `update_food_cart` item identity is `menu_item_id`, required with quantity. Live write validation remains pending.
+- Coupon responses use `coupon_sections[].coupons`, with `id`, `applicable` and descriptive terms. Real coupon application still needs an approved cart probe.
+- `get_food_cart` returned the documented nested pricing fields. Existing account cart is nonempty; do not discard it without exact app approval.
+
+Raw account responses and schema probes are private, mode 0600, under `/var/lib/mealmint/validation` on the VM. They must not be copied into Git or public demo media. Regression fixtures in `tests/service.test.ts` are synthetic. The public video remains a synthetic walkthrough.
+
+## Remaining checks
+
+Rerun the user's actual food search after the adapter deployment. Verify item/quantity identity, price units, coupon discounts and cleanup through a concretely approved cart comparison before claiming live quotes validated. Telegram still needs a dedicated BotFather token and real private-chat pairing. Live writes remain disabled during read validation.

@@ -1,5 +1,7 @@
 # Swiggy access and application plan
 
+**2026-10-07 update:** Swiggy approved the integration, whitelisted the MealMint callback, and the owner completed official account sign-in. Hosted discovery now runs in live mode. See [live validation](LIVE_VALIDATION.md) for actual schema findings and remaining quote/Telegram checks. The application instructions below are historical preparation, not remaining approval gates.
+
 The official MCP can support account-linked dish discovery, menus, contextual coupons and cart totals. It has no documented endpoint for the cheapest delivered meal across all restaurants. The LLM can explore queries and pages, while the backend ranks observed prices and approved cart snapshots.
 
 The [developer guide](https://mcp.swiggy.com/builders/docs/start/developer/) starts with a prototype. The [access guide](https://mcp.swiggy.com/builders/docs/operate/access/) describes local stubs, reviewed staging access, and production eligibility after staging validation. The actual [application form](https://docs.google.com/forms/d/e/1FAIpQLSfUhtaGOQjnxS0o8uHFZwZGNxJhJzyYhxiYVotlqdBCpizpUw/viewform) was inspected on 2026-10-03: it requires a production redirect URI and a publicly accessible demo video. Its callback requirement is stricter than the local development example. Verify it again before submitting.

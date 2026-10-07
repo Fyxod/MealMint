@@ -534,3 +534,47 @@ describe('live address adaptation (synthetic account fixtures)', () => {
     await expect(service.addresses()).rejects.toThrow('Connect Swiggy first.');
   });
 });
+
+describe('live dish discovery (synthetic contract fixtures)', () => {
+  it('joins menu search with open restaurants when restaurant search has no dishes', async () => {
+    const gateway: FoodGateway = new MockFoodGateway();
+    const service = new FoodService(gateway, idleAgent());
+    const conversation = service.create();
+    await service.selectAddress(conversation.id, 'mock-home');
+    service.updatePreferences(conversation.id, { budget: 300 });
+    const call = vi.spyOn(gateway, 'call');
+    call.mockResolvedValueOnce({ restaurants: [
+      { id: 'synthetic-open', name: 'Synthetic cafe', availabilityStatus: 'OPEN', deliveryTimeMinutes: 25 },
+      { id: 'synthetic-closed', name: 'Closed cafe', availabilityStatus: 'CLOSED' }
+    ], dishes: [], hasMore: false });
+    call.mockResolvedValueOnce({ items: [
+      { menu_item_id: 'synthetic-roll', restaurant_id: 'synthetic-open', name: 'Synthetic roll', price: 100, inStock: 1 },
+      { menu_item_id: 'synthetic-closed-roll', restaurant_id: 'synthetic-closed', name: 'Unavailable roll', price: 50, inStock: 1 },
+      { menu_item_id: 'synthetic-unknown-roll', restaurant_id: 'synthetic-unknown', name: 'Unknown roll', price: 40, inStock: 1 }
+    ], hasMore: true, nextOffset: '10' });
+    const result = await service.dispatch(conversation.id, 'food_search', { query: 'roll' });
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({ name: 'Synthetic roll', price: 100, available: true });
+    expect(result.hasMore).toBe(true);
+    expect(result.nextOffset).toBe(10);
+    expect(call.mock.calls.map(([name]) => name)).toEqual(['search_restaurants', 'search_menu']);
+  });
+});
+
+describe('categorized live menus (synthetic contract fixture)', () => {
+  it('flattens category items and exposes incomplete menu coverage and the next page', async () => {
+    const { service, conversation, gateway } = await readyService();
+    const search = await service.dispatch(conversation.id, 'food_search', { query: 'roll' });
+    const candidate = search.candidates[0];
+    const call = vi.spyOn(gateway as FoodGateway, 'call').mockResolvedValueOnce({
+      restaurant: { id: candidate.restaurantId, name: candidate.restaurant, isOpen: true, deliveryTime: 25 },
+      categories: [{ title: 'Synthetic combos', items: [{ id: 'synthetic-combo', name: 'Two rolls', price: 180, inStock: 1, isVeg: true }], hasMoreItems: true }],
+      page: 1, hasMore: true
+    });
+    const result = await service.dispatch(conversation.id, 'food_menu', { candidateId: candidate.id, page: 1 });
+    expect(result.candidates[0]).toMatchObject({ name: 'Two rolls', price: 180 });
+    expect(result.truncated).toBe(true);
+    expect(result.nextPage).toBe(2);
+    expect(call).toHaveBeenCalledWith('get_restaurant_menu', { addressId: 'mock-home', restaurantId: candidate.restaurantId, page: 1 });
+  });
+});

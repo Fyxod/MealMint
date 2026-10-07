@@ -120,8 +120,8 @@ export const foodTools: ToolSpec[] = [
     type: "function",
     name: "food_menu",
     description:
-      "Browse an observed candidate restaurant menu. Only use an observed candidate handle.",
-    inputSchema: objectSchema({ candidateId: { type: "string" } }, [
+      "Browse an observed candidate restaurant menu. Use nextPage for more categories when returned. Only use an observed candidate handle.",
+    inputSchema: objectSchema({ candidateId: { type: "string" }, page: { type: "integer", minimum: 1 } }, [
       "candidateId",
     ]),
   },
@@ -490,6 +490,8 @@ export class FoodService extends EventEmitter {
         })
         .strict()
         .parse(args);
+      if (a.budgetCollection && this.gateway.mode === "live")
+        throw new Error("The current live Swiggy catalogue does not support the ₹99 collection filter. Search by dish without budgetCollection instead.");
       this.status(c, `Searching ${a.query}`);
       const raw = await this.read(id, "search_restaurants", {
         addressId: c.request.addressId,
@@ -497,18 +499,28 @@ export class FoodService extends EventEmitter {
         ...(a.offset !== undefined ? { offset: a.offset } : {}),
         ...(a.budgetCollection ? { collection: "STORE_99" } : {}),
       });
+      // Live restaurant search can return no dishes at all. Fetch the dish
+      // catalogue separately and join only to restaurants confirmed open.
+      const dishes = raw.dishes ?? raw.items ?? [];
+      const menu = dishes.length ? raw : await this.read(id, "search_menu", {
+        addressId: c.request.addressId,
+        query: a.query,
+        ...(a.offset !== undefined ? { offset: a.offset } : {}),
+        ...(c.request.diet === "veg" ? { vegFilter: 1 } : {}),
+      });
       c.coverage.queries = [...new Set([...c.coverage.queries, a.query])];
-      c.coverage.hasMore ||= !!raw.hasMore;
+      c.coverage.hasMore ||= !!menu.hasMore;
       const candidates = this.register(
         c,
-        raw.dishes ?? raw.items ?? [],
+        dishes.length ? dishes : menu.items ?? [],
         raw.restaurants ?? [],
         a.includePotentialDeals,
       );
+      const offset = Number(menu.nextOffset);
       return {
         candidates,
-        hasMore: !!raw.hasMore,
-        nextOffset: raw.nextOffset,
+        hasMore: !!menu.hasMore,
+        nextOffset: Number.isSafeInteger(offset) && offset >= 0 ? offset : undefined,
         coverage: c.coverage,
         note: "Listed prices only; fees and coupons need an approved cart comparison. includePotentialDeals can admit subtotals above budget as hypotheses; never claim they are affordable before verifying payable totals.",
       };
@@ -610,8 +622,8 @@ export class FoodService extends EventEmitter {
       };
     }
     if (name === "food_menu" || name === "food_offers") {
-      const { candidateId } = z
-          .object({ candidateId: z.string() })
+      const { candidateId, page } = z
+          .object({ candidateId: z.string(), page: z.number().int().min(1).max(100).optional() })
           .strict()
           .parse(args),
         candidate = this.observed(id, candidateId);
@@ -621,6 +633,7 @@ export class FoodService extends EventEmitter {
         {
           addressId: c.request.addressId,
           restaurantId: candidate.restaurantId,
+          ...(name === "food_menu" && page !== undefined ? { page } : {}),
         },
       );
       if (name === "food_offers")
@@ -631,13 +644,14 @@ export class FoodService extends EventEmitter {
       return {
         candidates: this.register(
           c,
-          (raw.items ?? []).map((x: any) => ({
+          (raw.items ?? (raw.categories ?? []).flatMap((category: any) => category.items ?? [])).map((x: any) => ({
             ...x,
             restaurantId: candidate.restaurantId,
           })),
           [raw.restaurant],
         ),
-        truncated: !!raw.truncated,
+        truncated: !!raw.truncated || !!raw.hasMore || (raw.categories ?? []).some((category: any) => category.hasMoreItems === true),
+        nextPage: raw.hasMore === true && Number.isSafeInteger(raw.page) ? raw.page + 1 : undefined,
       };
     }
     if (name === "food_present" || name === "food_compare") {

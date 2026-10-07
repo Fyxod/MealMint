@@ -340,7 +340,7 @@ export function App() {
             <option value="">Choose delivery address</option>
             {addresses.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.label}
+                {a.label}{a.display ? ` — ${a.display}` : ""}
               </option>
             ))}
           </select>
@@ -949,9 +949,9 @@ export function App() {
               </form>
             </section>
             <div className="settings-note">
-              Swiggy demo mode is labelled throughout. Real account access is
-              enabled after staging approval. Authentication credentials stay
-              outside the public repository.
+              {source === "mock"
+                ? "Demo mode uses synthetic restaurants and prices."
+                : "Live searches use your connected Swiggy account. Cart comparisons require your approval. MealMint cannot place orders or make payments."}
             </div>
             {error && (
               <p role="alert" className="settings-error">

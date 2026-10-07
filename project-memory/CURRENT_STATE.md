@@ -1,5 +1,7 @@
 # Current state
 
+2026-10-07 current milestone: Swiggy access is approved and the owner completed account consent/OTP. Hosted mode is live with connected Swiggy/Codex; quote writes remain gated. Source 343c4b1 deployed for fresh, correctly mapped saved addresses. Actual live discovery exposed payload mismatches now being fixed and tested; see repository docs/LIVE_VALIDATION.md. Dedicated Telegram token still missing. This supersedes the Oct 3 pending-access/application statements below; earlier tests/video are synthetic evidence only.
+
 2026-10-03: The user renamed the product to MealMint everywhere. This supersedes prior branding and active hosting paths. Authoritative checkout is `/home/fyxod/Desktop/MealMint`; public repo is https://github.com/Fyxod/MealMint. The older empty environment checkout under Documents/ChatGPT is unrelated. Original milestones and names are preserved only in the dated decision log/user directive history.
 
 Web chat, Telegram adapter, Codex provider, official Swiggy MCP/OAuth, synthetic gateway, exact item bundles/coupon comparisons and encrypted user directives are implemented. UI/page title, package, Codex/MCP/OAuth client names, Telegram greeting, source links and deployment templates now use MealMint. Source rename commit is 5078ba4. Typecheck, all 73 tests and production build passed. An existing Telegram greeting assertion was updated for the new branding; no behavior was loosened.
