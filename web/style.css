@@ -935,6 +935,10 @@ h1 > span {
 .approval-plans li + li {
   margin-top: 10px;
 }
+.approval-plans strong,
+.approval-plans small {
+  display: block;
+}
 .modal-icon {
   display: grid;
   place-items: center;
