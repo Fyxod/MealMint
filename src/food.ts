@@ -13,6 +13,12 @@ const allowed = new Set([
   "apply_food_coupon",
   "flush_food_cart",
 ]);
+export class SwiggyResponseError extends Error {
+  constructor(readonly reason: "INVALID_ADDON" | "UNAVAILABLE" | "REJECTED") {
+    super(reason === "INVALID_ADDON" ? "Swiggy rejected these add-on choices. Edit the choices and try again." :
+      reason === "UNAVAILABLE" ? "This food is no longer available. Search again." : "Swiggy could not complete this request.");
+  }
+}
 export class LiveFoodGateway implements FoodGateway {
   readonly mode = "live" as const;
   private client: Client | null = null;
@@ -116,8 +122,12 @@ export class LiveFoodGateway implements FoodGateway {
       if (result.isError || data?.success === false)
         throw new Error("Swiggy could not complete this request.");
       if (!data) throw new Error("Swiggy returned no structured data.");
+      if (data.successful === false || (typeof data.statusCode === "number" && data.statusCode !== 0))
+        throw new SwiggyResponseError(data.errorCodes?.includes("INVALID_ADDON") ? "INVALID_ADDON" :
+          data.errorCodes?.some((x: string) => /UNAVAILABLE|OUT_OF_STOCK|INVALID_ITEM/.test(x)) ? "UNAVAILABLE" : "REJECTED");
       return data.success === true && "data" in data ? data.data : data;
     } catch (e: any) {
+      if (e instanceof SwiggyResponseError) throw e;
       if (
         e.code === 401 ||
         /401|unauthoriz|revoked|419/i.test(String(e.message))

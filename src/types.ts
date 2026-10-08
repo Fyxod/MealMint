@@ -12,6 +12,34 @@ export interface Address {
   label: string;
   display: string;
 }
+export interface ChoiceRef { groupId: string; choiceId: string }
+export interface ChoiceGroup {
+  id: string;
+  name: string;
+  min: number;
+  max: number | null;
+  conditionalMin?: number;
+  choices: { id: string; name: string; price: number | null; available: boolean; isDefault: boolean; isVeg?: boolean | null }[];
+}
+export interface CustomizationDetails {
+  format: "variants" | "variantsV2" | null;
+  variants: ChoiceGroup[];
+  addons: ChoiceGroup[];
+  bootstrap?: ChoiceRef[];
+}
+export interface ItemSelection {
+  format: CustomizationDetails["format"];
+  variants: ChoiceRef[];
+  addons: ChoiceRef[];
+  summary: string[];
+  bootstrap?: ChoiceRef[];
+}
+export interface CartLine {
+  itemId: string;
+  name: string;
+  quantity: number;
+  selection?: ItemSelection;
+}
 export interface Candidate {
   id: string;
   itemId: string;
@@ -26,7 +54,10 @@ export interface Candidate {
   customizable: boolean;
   offer: string | null;
   source: "mock" | "live";
-  lines?: { itemId: string; name: string; quantity: number }[];
+  lines?: CartLine[];
+  selection?: ItemSelection;
+  originalName?: string;
+  originalIsVeg?: boolean | null;
   dealHypothesis?: boolean;
 }
 export interface UserDirective {

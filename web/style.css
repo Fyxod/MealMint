@@ -1313,3 +1313,16 @@ h1 > span {
     transition: none !important;
   }
 }
+
+/* Account menu choices use text labels and native controls on all screen sizes. */
+.food-option .food-card { width: 100%; }
+.edit-options { margin: -4px 0 12px 46px; font-size: 12px; color: var(--green, #16865b); }
+.diet-mark.unknown { border-color: #888; color: #888; }
+.customizations { max-height: 85dvh; overflow-y: auto; }
+.customizations fieldset { border: 1px solid #dce5df; border-radius: 12px; padding: 12px; margin: 14px 0; }
+.customizations legend { font-weight: 600; padding: 0 5px; }
+.custom-choice { display: flex; gap: 10px; align-items: center; padding: 10px 0; cursor: pointer; }
+.custom-choice span { flex: 1; }
+.custom-choice input { accent-color: #16865b; width: 18px; height: 18px; flex-shrink: 0; }
+.custom-choice small { white-space: nowrap; }
+.customizations .modal-actions { position: sticky; bottom: -28px; background: white; padding: 14px 0; }

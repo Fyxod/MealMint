@@ -18,7 +18,7 @@ import {
   Utensils,
   X,
 } from "lucide-react";
-import type { Address, Conversation, UserDirective } from "../src/types";
+import type { Address, Candidate, ChoiceRef, CustomizationDetails, Conversation, UserDirective } from "../src/types";
 
 const money = (n: number | null) =>
   n === null
@@ -59,6 +59,25 @@ export function App() {
     url: string;
     label: string;
   } | null>(null);
+  const [custom, setCustom] = useState<{ candidateId: string; name: string; details: CustomizationDetails; variants: ChoiceRef[]; addons: ChoiceRef[] } | null>(null);
+  const [customError, setCustomError] = useState("");
+  const [customBusy, setCustomBusy] = useState(false);
+  async function openCustom(candidate: Candidate) {
+    setCustomError("");
+    const data = await api(`/api/conversations/${chat!.id}/customizations/${candidate.id}`);
+    setCustom({ ...data, variants: candidate.selection?.variants ?? [], addons: candidate.selection?.addons ?? [] });
+  }
+  function chooseOption(kind: "variants" | "addons", groupId: string, choiceId: string) {
+    setCustomError("");
+    setCustom(current => {
+      if (!current) return current;
+      const refs = current[kind];
+      const selected = refs.some(x => x.groupId === groupId && x.choiceId === choiceId);
+      return { ...current, [kind]: kind === "variants"
+        ? [...refs.filter(x => x.groupId !== groupId), { groupId, choiceId }]
+        : selected ? refs.filter(x => x.groupId !== groupId || x.choiceId !== choiceId) : [...refs, { groupId, choiceId }] };
+    });
+  }
   const bottom = useRef<HTMLDivElement>(null),
     textarea = useRef<HTMLTextAreaElement>(null);
   async function api(url: string, body?: unknown) {
@@ -615,11 +634,12 @@ export function App() {
                     </div>
                   </div>
                   {chat.candidates.map((c, i) => (
+                    <div key={c.id} className="food-option">
                     <button
                       className={`food-card ${actualSelected.includes(c.id) ? "selected" : ""}`}
                       key={c.id}
-                      disabled={c.customizable || chat.busy}
-                      onClick={() =>
+                      disabled={chat.busy}
+                      onClick={() => c.customizable ? void attempt(() => openCustom(c)) :
                         setSelected((ids) =>
                           ids.includes(c.id)
                             ? ids.filter((x) => x !== c.id)
@@ -636,7 +656,7 @@ export function App() {
                       <div className="food-info">
                         <div className="food-title">
                           <span
-                            className={`diet-mark ${c.isVeg ? "veg" : "nonveg"}`}
+                            className={`diet-mark ${c.isVeg === null ? "unknown" : c.isVeg ? "veg" : "nonveg"}`} title={c.isVeg === null ? "Diet not confirmed" : c.isVeg ? "Vegetarian" : "Non-vegetarian"}
                           />
                           <h3>{c.name}</h3>
                         </div>
@@ -651,7 +671,7 @@ export function App() {
                             Item combination · quantities shown per bundle
                           </small>
                         )}
-                        {c.dealHypothesis &&
+                        {c.dealHypothesis && c.price !== null &&
                           chat.request.budget !== null &&
                           c.price! * chat.request.quantity >
                             chat.request.budget && (
@@ -661,17 +681,19 @@ export function App() {
                             </small>
                           )}
                         {c.customizable && (
-                          <small>Customization needed · browse in Swiggy</small>
+                          <small>Choose options</small>
                         )}
                       </div>
                       <div className="food-price">
                         <strong>{money(c.price)}</strong>
-                        <span>listed</span>
+                        <span>{c.price === null ? "check in cart" : "listed"}</span>
                         <span className="check-box">
                           {actualSelected.includes(c.id) && <Check size={13} />}
                         </span>
                       </div>
                     </button>
+                    {c.selection && <button className="edit-options" disabled={chat.busy} onClick={() => void attempt(() => openCustom(c))}>Edit choices</button>}
+                    </div>
                   ))}
                 </>
               )}
@@ -735,7 +757,41 @@ export function App() {
           </section>
         </div>
       </main>
-      {chat?.approval?.status === "pending" && (
+      {custom && (
+        <div className="modal-backdrop">
+          <section className="modal customizations" role="dialog" aria-modal="true" aria-labelledby="custom-title">
+            <h2 id="custom-title">Customize {custom.name}</h2>
+            <p>Choose required options and any extras. Swiggy confirms availability and the final price in the cart check.</p>
+            {(["variants", "addons"] as const).map(kind => custom.details[kind].map(group => (
+              <fieldset key={`${kind}:${group.id}`}>
+                <legend>{group.name}</legend>
+                <small>{group.conditionalMin ? `May require ${group.conditionalMin} for your meal variant` : group.min ? `Required: at least ${group.min}` : "Optional"}{group.max !== null ? ` · up to ${group.max}` : ""}</small>
+                {group.choices.map(choice => (
+                  <label className="custom-choice" key={choice.id}>
+                    <input type={kind === "variants" ? "radio" : "checkbox"} name={`${kind}:${group.id}`}
+                      disabled={!choice.available || customBusy}
+                      checked={custom[kind].some(x => x.groupId === group.id && x.choiceId === choice.id)}
+                      onChange={() => chooseOption(kind, group.id, choice.id)} />
+                    <span>{choice.name}{!choice.available ? " · unavailable" : ""}</span>
+                    <small>{money(choice.price)}</small>
+                  </label>
+                ))}
+              </fieldset>
+            )))}
+            {customError && <p role="alert">{customError}</p>}
+            <div className="modal-actions">
+              <button disabled={customBusy} onClick={() => setCustom(null)}>Cancel</button>
+              <button className="primary" disabled={customBusy || chat?.busy} onClick={() => {
+                setCustomBusy(true); setCustomError("");
+                void api(`/api/conversations/${chat!.id}/customizations/${custom.candidateId}`, { variants: custom.variants, addons: custom.addons })
+                  .then(result => { setChat(result.conversation); setSelected(ids => [...ids.filter(id => id !== custom.candidateId), result.candidate.id].slice(-3)); setCustom(null); })
+                  .catch(e => setCustomError(e.message)).finally(() => setCustomBusy(false));
+              }}>{customBusy ? "Saving…" : "Save choices"}</button>
+            </div>
+          </section>
+        </div>
+      )}
+      {chat?.approval?.status === "pending" && !custom && (
         <div className="modal-backdrop">
           <section
             className="modal"
@@ -763,7 +819,7 @@ export function App() {
                   <small>
                     {plan.restaurant} · {chat.request.quantity}{" "}
                     {plan.lines ? "bundle(s)" : "item(s)"} ·{" "}
-                    {money(plan.price! * chat.request.quantity)} listed
+                    {money(plan.price === null ? null : plan.price * chat.request.quantity)} listed
                   </small>
                 </li>
               ))}

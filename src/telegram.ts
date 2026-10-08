@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { FoodService } from "./service.js";
-import type { Address, Conversation } from "./types.js";
+import type { Address, ChoiceRef, CustomizationDetails, Conversation } from "./types.js";
 import { SecretStore, redact, safeEqual } from "./security.js";
 
 export class TelegramBot {
@@ -12,6 +12,7 @@ export class TelegramBot {
   private abort: AbortController | null = null;
   private username: string | null = null;
   private addressMenu: { nonce: string; choices: Address[]; expiresAt: number } | null = null;
+  private customMenu: { nonce: string; conversationId: string; candidateId: string; name: string; details: CustomizationDetails; variants: ChoiceRef[]; addons: ChoiceRef[]; expiresAt: number; page: number; messageId?: number } | null = null;
   constructor(
     private token: string,
     private service: FoodService,
@@ -105,11 +106,18 @@ export class TelegramBot {
     }
   }
   private async send(chat: number, text: string, buttons?: any[]) {
-    return this.api("sendMessage", {
-      chat_id: chat,
-      text: text.slice(0, 4000),
-      ...(buttons ? { reply_markup: { inline_keyboard: buttons } } : {}),
+    const chunks: string[] = [];
+    for (let remaining = text; remaining.length;) {
+      const boundary = remaining.length > 3900 ? remaining.lastIndexOf("\n", 3900) : remaining.length;
+      const end = boundary > 100 ? boundary : Math.min(3900, remaining.length);
+      chunks.push(remaining.slice(0, end)); remaining = remaining.slice(end).replace(/^\n/, "");
+    }
+    let result: any;
+    for (let index = 0; index < chunks.length; index++) result = await this.api("sendMessage", {
+      chat_id: chat, text: chunks[index],
+      ...(buttons && index === chunks.length - 1 ? { reply_markup: { inline_keyboard: buttons } } : {}),
     });
+    return result;
   }
   private conversation(chat: number) {
     const id = this.conversations.get(chat);
@@ -123,6 +131,15 @@ export class TelegramBot {
     return c;
   }
   async handle(update: any) {
+    try { await this.handleUpdate(update); }
+    catch (e) {
+      const message = update.message ?? update.callback_query?.message;
+      const user = update.message?.from ?? update.callback_query?.from;
+      if (message?.chat?.type === "private" && user?.id === this.owner && message.chat.id === user.id)
+        await this.send(user.id, redact((e as Error).message));
+    }
+  }
+  private async handleUpdate(update: any) {
     const message = update.message ?? update.callback_query?.message,
       user = update.message?.from ?? update.callback_query?.from;
     if (
@@ -156,7 +173,46 @@ export class TelegramBot {
         callback_query_id: update.callback_query.id,
       });
       const data: string = update.callback_query.data ?? "";
-      if (data.startsWith("address:")) {
+      try {
+      if (data.startsWith("customize:")) {
+        if (c.busy) throw new Error("Wait for the current operation to finish.");
+        const candidateId = data.slice(10);
+        const options = await this.service.customizationOptions(c.id, candidateId);
+        const current = c.candidates.find(x => x.id === candidateId)?.selection;
+        this.customMenu = { ...options, nonce: randomBytes(6).toString("base64url"), conversationId: c.id, variants: current?.variants ?? [], addons: current?.addons ?? [], expiresAt: Date.now() + 300000, page: 0 };
+        await this.renderCustom(chat);
+      } else if (data.startsWith("choice:")) {
+        const [, nonce, action, index, choiceIndex] = data.split(":");
+        const menu = this.customMenu;
+        if (!menu || menu.conversationId !== c.id || menu.expiresAt < Date.now() || !safeEqual(nonce ?? "", menu.nonce)) throw new Error("Customization choices expired. Open Customize again.");
+        if (c.busy) throw new Error("Wait for the current operation to finish.");
+        const groups = [...menu.details.variants.map(group => ({ kind: "variants" as const, group })), ...menu.details.addons.map(group => ({ kind: "addons" as const, group }))];
+        if (action === "cancel") { this.customMenu = null; await this.send(chat, "Choices cancelled. Your cart was not changed."); return; }
+        if (action === "save") {
+          this.service.configure(c.id, menu.candidateId, { variants: menu.variants, addons: menu.addons });
+          this.customMenu = null;
+          await this.send(chat, "Choices saved. Check the delivered total before deciding.");
+          await this.render(chat, c); return;
+        }
+        if (action === "page") {
+          const page = Number(index);
+          if (!Number.isInteger(page) || page < 0 || page >= groups.length) throw new Error("Invalid choice page.");
+          if (menu.page === page) return;
+          menu.page = page;
+        } else if (action === "pick") {
+          if (!/^\d+$/.test(index ?? "") || Number(index) !== menu.page) throw new Error("That group changed. Use the current choice buttons.");
+          const { kind, group } = groups[menu.page];
+          const choice = group.choices[Number(choiceIndex)];
+          if (!/^\d+$/.test(choiceIndex ?? "") || !choice?.available) throw new Error("Choice unavailable.");
+          const refs = menu[kind];
+          const selected = refs.some(x => x.groupId === group.id && x.choiceId === choice.id);
+          if (kind === "variants" && selected) return;
+          if (kind === "addons" && !selected && group.max !== null && refs.filter(x => x.groupId === group.id).length >= group.max) throw new Error(`Choose at most ${group.max} in ${group.name}.`);
+          menu[kind] = kind === "variants" ? [...refs.filter(x => x.groupId !== group.id), { groupId: group.id, choiceId: choice.id }]
+            : selected ? refs.filter(x => x.groupId !== group.id || x.choiceId !== choice.id) : [...refs, { groupId: group.id, choiceId: choice.id }];
+        } else throw new Error("Unknown choice action.");
+        await this.renderCustom(chat);
+      } else if (data.startsWith("address:")) {
         const [, nonce, index] = data.split(":");
         const menu = this.addressMenu;
         if (!menu || menu.expiresAt < Date.now() || !safeEqual(nonce ?? "", menu.nonce) || !/^\d+$/.test(index ?? "")) {
@@ -177,20 +233,22 @@ export class TelegramBot {
         } catch (e) {
           await this.send(chat, redact((e as Error).message));
         }
-      } else if (data.startsWith("approve:")) {
-        const approvalId = data.slice(8);
+      } else if (data.startsWith("approve:") || data.startsWith("discardapprove:")) {
+        const discardExisting = data.startsWith("discardapprove:");
+        const approvalId = data.slice(discardExisting ? 15 : 8);
         await this.send(
           chat,
           "Checking delivered totals. Please leave your Swiggy cart unchanged during the comparison.",
         );
         void this.service
-          .approve(c.id, approvalId)
+          .approve(c.id, approvalId, discardExisting)
           .then(() => this.render(chat, c))
           .catch((e) => this.send(chat, redact(e.message)));
       } else if (data === "cancel") {
         await this.service.cancel(c.id);
         await this.send(chat, "Stopped.");
       }
+      } catch (e) { await this.send(chat, redact((e as Error).message)); }
       return;
     }
     if (text === "/start" || text === "/help") {
@@ -229,6 +287,7 @@ export class TelegramBot {
       this.service.remove(c.id);
       this.conversations.delete(chat);
       this.addressMenu = null;
+      this.customMenu = null;
       await this.send(chat, "New conversation. Use /addresses first.");
       return;
     }
@@ -251,6 +310,23 @@ export class TelegramBot {
       .then(() => this.render(chat, c))
       .catch((e) => this.send(chat, redact(e.message)));
   }
+  private async renderCustom(chat: number) {
+    const menu = this.customMenu!;
+    const groups = [...menu.details.variants.map(group => ({ kind: "variants" as const, group })), ...menu.details.addons.map(group => ({ kind: "addons" as const, group }))];
+    const current = groups[menu.page];
+    const buttons: any[] = current ? current.group.choices.map((choice, index) => [{
+      text: `${menu[current.kind].some(x => x.groupId === current.group.id && x.choiceId === choice.id) ? "✓ " : ""}${choice.name}${choice.price === null ? "" : ` · ₹${choice.price}`}${choice.available ? "" : " · unavailable"}`.slice(0, 100),
+      callback_data: `choice:${menu.nonce}:pick:${menu.page}:${index}`,
+    }]) : [];
+    if (groups.length > 1) buttons.push([
+      ...(menu.page > 0 ? [{ text: "Previous group", callback_data: `choice:${menu.nonce}:page:${menu.page - 1}` }] : []),
+      ...(menu.page < groups.length - 1 ? [{ text: "Next group", callback_data: `choice:${menu.nonce}:page:${menu.page + 1}` }] : []),
+    ]);
+    buttons.push([{ text: "Save choices", callback_data: `choice:${menu.nonce}:save` }, { text: "Cancel choices", callback_data: `choice:${menu.nonce}:cancel` }]);
+    const text = `Customize ${menu.name}\n\n${current ? `${menu.page + 1}/${groups.length}: ${current.group.name}\n${current.group.conditionalMin ? `May require ${current.group.conditionalMin} for your meal variant` : current.group.min ? `Required: at least ${current.group.min}` : "Optional"}${current.group.max === null ? "" : ` · up to ${current.group.max}`}` : "No additional choices"}\n\n${menu.variants.length + menu.addons.length} choices selected. Listed option prices may not be additive. Final price and valid add-ons are checked in the cart after approval.`;
+    if (menu.messageId) await this.api("editMessageText", { chat_id: chat, message_id: menu.messageId, text, reply_markup: { inline_keyboard: buttons } });
+    else menu.messageId = (await this.send(chat, text, buttons)).message_id;
+  }
   private async render(chat: number, c: Conversation) {
     const last = c.messages.at(-1);
     if (last?.role === "assistant") await this.send(chat, last.text);
@@ -272,41 +348,35 @@ export class TelegramBot {
         c.candidates
           .map(
             (x, i) =>
-              `${i + 1}. ${x.name} · ${x.restaurant}\n₹${x.price} listed · ${x.eta ?? "?"} min${x.lines ? " · quantities per bundle" : ""}${x.dealHypothesis ? " · coupon savings unverified" : ""}${x.customizable ? " · needs customization" : ""}`,
+              `${i + 1}. ${x.name} · ${x.restaurant}\n${x.price === null ? "Price needs cart check" : `₹${x.price} listed`} · ${x.eta ?? "?"} min${x.lines ? " · quantities per bundle" : ""}${x.dealHypothesis ? " · coupon savings unverified" : ""}${x.customizable ? " · needs customization" : ""}`,
           )
           .join("\n\n"),
         c.candidates
-          .filter((x) => !x.customizable)
           .slice(0, 6)
           .map((x, i) => [
+            ...(x.selection ? [{ text: "Edit choices", callback_data: `customize:${x.id}` }] : []),
             {
-              text: `Check ${x.name}`.slice(0, 40),
-              callback_data: `compare:${x.id}`,
+              text: `${x.customizable ? "Customize" : "Check"} ${x.name}`.slice(0, 40),
+              callback_data: `${x.customizable ? "customize" : "compare"}:${x.id}`,
             },
           ]),
       );
     if (c.approval?.status === "pending") {
-      if (c.approval.discardExisting)
         await this.send(
           chat,
-          "Your Swiggy cart already has items. Empty it in Swiggy if you want to compare, then request a new comparison here.",
-        );
-      else
-        await this.send(
-          chat,
-          "Check these exact options by temporarily changing your Swiggy cart?\n\n" +
+          (c.approval.discardExisting ? "Your Swiggy cart already has items. Approving will DISCARD those items.\n\n" : "") + "Check these exact options by temporarily changing your Swiggy cart?\n\n" +
             c.approval.plans
               .map(
                 (x) =>
-                  `${x.name} · ${x.restaurant}\n${c.approval!.request.quantity} ${x.lines ? "bundle(s)" : "item(s)"} · ₹${((x.price ?? 0) * c.approval!.request.quantity).toFixed(2)} listed subtotal`,
+                  `${x.name} · ${x.restaurant}\n${c.approval!.request.quantity} ${x.lines ? "bundle(s)" : "item(s)"} · ${x.price === null ? "Subtotal needs cart check" : `₹${(x.price * c.approval!.request.quantity).toFixed(2)} listed subtotal`}`,
               )
               .join("\n\n") +
             "\n\nThe test cart will be cleared afterward. No orders will be placed.",
           [
             [
               {
-                text: "Approve comparison",
-                callback_data: `approve:${c.approval.id}`,
+                text: c.approval.discardExisting ? "Discard cart & approve" : "Approve comparison",
+                callback_data: `${c.approval.discardExisting ? "discardapprove" : "approve"}:${c.approval.id}`,
               },
               { text: "Cancel", callback_data: "cancel" },
             ],

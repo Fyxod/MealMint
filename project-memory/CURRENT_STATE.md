@@ -1,5 +1,7 @@
 # Current state
 
+2026-10-08 update: Live accounts connected; Telegram configured and paired, superseding earlier missing-token/access gates. Runtime 94e2bec. Controlled real comparison failed on numeric-versus-string item ID, followed by a successful single-cart ₹266 baseline probe and cleanup. Customization UI/bot/backend work is in progress, not deployed or fully validated. See NEXT_CHECKPOINT.md and docs/LIVE_VALIDATION.md. Prior dated milestones below are historical.
+
 2026-10-07 current milestone: Swiggy access is approved and the owner completed account consent/OTP. Hosted mode is live with connected Swiggy/Codex; quote writes remain gated. Source fe344e3 deployed for fresh, correctly mapped saved addresses, restaurant/menu search joining, categorized menu pagination, and explicit unsupported collection handling. Typecheck, 76 tests and production build passed. Actual Luna max live search is being rerun; see repository docs/LIVE_VALIDATION.md. Dedicated Telegram token still missing. This supersedes the Oct 3 pending-access/application statements below; earlier tests/video are synthetic evidence only.
 
 2026-10-03: The user renamed the product to MealMint everywhere. This supersedes prior branding and active hosting paths. Authoritative checkout is `/home/fyxod/Desktop/MealMint`; public repo is https://github.com/Fyxod/MealMint. The older empty environment checkout under Documents/ChatGPT is unrelated. Original milestones and names are preserved only in the dated decision log/user directive history.

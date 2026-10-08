@@ -167,7 +167,7 @@ describe('TelegramBot', () => {
     const blockedPrompt = runtime.calls.filter(call => call.method === 'sendMessage')
       .find(call => String(call.body.text).startsWith('Your Swiggy cart already has items'))!;
     expect(blockedPrompt).toBeDefined();
-    expect(blockedPrompt.body.reply_markup).toBeUndefined();
+    expect(blockedPrompt.body.reply_markup.inline_keyboard[0][0]).toMatchObject({ text: 'Discard cart & approve', callback_data: `discardapprove:${conversation.approval!.id}` });
 
     await runtime.bot.handle(callback(ownerId, `approve:${conversation.approval!.id}`, 'forged-approve'));
     await waitFor(() => runtime.calls.some(call => call.method === 'sendMessage' && String(call.body.text).includes('Your existing cart would be discarded.')));
@@ -175,6 +175,10 @@ describe('TelegramBot', () => {
     expect(runtime.calls.filter(call => ['update_food_cart', 'flush_food_cart', 'apply_food_coupon'].includes(call.method))).toHaveLength(writesBeforeCompare);
     const stillThere: any = await runtime.gateway.call('get_food_cart', { addressId: 'mock-home' });
     expect(stillThere.data.items[0].menu_item_id).toBe('i4');
+    await runtime.bot.handle(callback(ownerId, `discardapprove:${conversation.approval!.id}`, 'explicit-discard'));
+    await waitFor(() => conversation.approval?.status === 'done');
+    expect(conversation.quotes).toHaveLength(1);
+    expect((await runtime.gateway.call('get_food_cart', { addressId: 'mock-home' }) as any).data.items).toEqual([]);
   });
 
   it('keeps the observed address identity when the saved list reorders and rejects stale menus', async () => {
@@ -228,6 +232,43 @@ describe('TelegramBot', () => {
     expect(conversation.quotes[0].name).toBe('Veg thali');
     const finalCart: any = await runtime.gateway.call('get_food_cart', { addressId: 'mock-home' });
     expect(finalCart.data.items).toEqual([]);
+  });
+
+  it('guides required choices, rejects stale buttons, and saves exact selected options without cart writes', async () => {
+    const runtime = createBot(); await pair(runtime);
+    await runtime.bot.handle(message(ownerId, '/addresses'));
+    await runtime.bot.handle(callback(ownerId, addressCallback(runtime)));
+    const c = [...runtime.service.conversations.values()][0];
+    runtime.service.updatePreferences(c.id, { budget: 500 });
+    const result = await runtime.service.dispatch(c.id, 'food_search', { query: 'pizza' });
+    const candidate = result.candidates.find((x: any) => x.customizable);
+    await runtime.service.dispatch(c.id, 'food_present', { candidateIds: [candidate.id] });
+    const original = runtime.gateway.call.bind(runtime.gateway);
+    const calls = vi.spyOn(runtime.gateway, 'call').mockImplementation(async (name, args): Promise<any> => name === 'search_menu' ? { items: [{ menu_item_id: candidate.itemId, inStock: 1, hasVariants: true, hasAddons: true,
+      variantsV2: [{ groupId: 'size', name: 'Size', variations: [{ id: 'small', name: 'Small', price: 100, inStock: 1 }, { id: 'large', name: 'Large', price: 140, inStock: 1 }] }],
+      addons: [{ groupId: 'extra', groupName: 'Extras', maxAddons: 1, choices: [{ id: 'cheese', name: 'Cheese', price: 20 }, { id: 'sauce', name: 'Sauce', price: 10 }] }]
+    }] } : original(name, args));
+    await runtime.bot.handle(callback(ownerId, `customize:${candidate.id}`));
+    const prompt = runtime.calls.filter(x => x.method === 'sendMessage').at(-1)!;
+    const pick = prompt.body.reply_markup.inline_keyboard[0][0].callback_data;
+    const nonce = pick.split(':')[1];
+    expect(Buffer.byteLength(pick)).toBeLessThanOrEqual(64);
+    await runtime.bot.handle(callback(ownerId, `choice:${nonce}:save`));
+    expect(runtime.calls.at(-1)!.body.text).toContain('Size: choose 1');
+    await runtime.bot.handle(callback(ownerId, pick));
+    expect(runtime.calls.at(-1)!.method).toBe('editMessageText');
+    await runtime.bot.handle(callback(ownerId, `choice:${nonce}:page:1`));
+    await runtime.bot.handle(callback(ownerId, pick));
+    expect(runtime.calls.at(-1)!.body.text).toContain('group changed');
+    await runtime.bot.handle(callback(ownerId, `choice:${nonce}:pick:1:0`));
+    await runtime.bot.handle(callback(ownerId, `choice:${nonce}:pick:1:1`));
+    expect(runtime.calls.at(-1)!.body.text).toContain('at most 1');
+    await runtime.bot.handle(callback(ownerId, `choice:${nonce}:save`));
+    expect(c.candidates[0].selection).toMatchObject({ variants: [{ groupId: 'size', choiceId: 'small' }], addons: [{ groupId: 'extra', choiceId: 'cheese' }] });
+    expect(c.candidates[0].price).toBeNull();
+    expect(calls.mock.calls.every(([name]) => !['update_food_cart', 'flush_food_cart'].includes(name))).toBe(true);
+    await runtime.bot.handle(callback(ownerId, pick));
+    expect(runtime.calls.at(-1)!.body.text).toContain('choices expired');
   });
 
   it('keeps the current conversation when /new arrives while the agent is busy', async () => {

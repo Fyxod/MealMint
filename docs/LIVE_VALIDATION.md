@@ -25,3 +25,13 @@ Rerun the user's actual food search after the adapter deployment. Verify item/qu
 The actual Luna max search published six real options after the adapter fix. Its final explanation hit the 180-second deadline; runtime allowance was increased to 300 seconds. Telegram address callback identity is now frozen with an expiring nonce, independent of fresh Swiggy address ordering. Typecheck, 77 tests and production build passed.
 
 Owner supplied a dedicated Telegram token and explicitly authorized modifying/clearing the account cart for bounded tests. The initial quote gate may be opened for this controlled owner-approved validation; that configuration alone is not evidence of correct delivered totals. Record actual quote/coupon/cleanup outcomes below before claiming success. Credentials and private account choices remain outside this document.
+
+## 2026-10-08 cart/customization findings
+
+Owner completed Telegram pairing and explicitly authorized bounded cart mutations for tests. Initial approved multi-cart check stopped safely: numeric live menu_item_id differed from the string candidate ID. Controlled burger-combo baseline probe returned ₹266 payable and cleanup confirmed empty cart. Source now normalizes exact identifier types and rejects unavailable numeric stock values.
+
+Live offer id is an internal UUID; redeemable codes come from explicit code or the description (for example, a display title can differ from the actual code). The new adapter never sends UUIDs as couponCode. Coupon application and full comparisons still require runtime validation after deployment.
+
+Variant menus can flatten required add-on groups from multiple meal variants, and cart valid_addons uses paise prices while scoped menu prices use rupees. Do not add these prices together. A variants-only Burger King probe returned INVALID_ADDON; including the observed fixed zero-price item selection produced the intended Burger Only variant at ₹128 payable. Cleanup confirmed empty cart. The adapter retains exact variant IDs, separates fixed structural choices from extras, permits only approved fixed alternatives, and verifies actual cart choices. Ordinary required-group minima remain enforced; flattened minima are conditional and validated by Swiggy. Failed or uncertain transport writes are never automatically retried.
+
+Owner paused tests to use the app, then explicitly resumed. All raw responses remain protected on the VM. Website/Telegram choice flows, final coupon outcomes and cleanup are the next validation stage; source checks passing are not substitutes for that evidence.

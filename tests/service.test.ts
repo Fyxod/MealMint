@@ -417,13 +417,13 @@ describe('FoodService', () => {
         { candidateId: plainDosa.id, quantity: 1 },
         { candidateId: thali.id, quantity: 1 }
       ]
-    })).rejects.toThrow('Combine available simple observed dishes from one restaurant only.');
+    })).rejects.toThrow('Combine available observed dishes from one restaurant only. Configure required choices first.');
     await expect(service.dispatch(conversation.id, 'food_bundle', {
       items: [{ candidateId: 'invented-option', quantity: 1 }]
     })).rejects.toThrow('Unknown candidate.');
     await expect(service.dispatch(conversation.id, 'food_bundle', {
       items: [{ candidateId: customPizza.id, quantity: 1 }]
-    })).rejects.toThrow('Combine available simple observed dishes from one restaurant only.');
+    })).rejects.toThrow('Combine available observed dishes from one restaurant only. Configure required choices first.');
     await expect(service.dispatch(conversation.id, 'food_bundle', {
       items: Array.from({ length: 6 }, () => ({ candidateId: plainDosa.id, quantity: 1 }))
     })).rejects.toThrow();
@@ -436,7 +436,7 @@ describe('FoodService', () => {
     })).candidate;
     await expect(service.dispatch(conversation.id, 'food_bundle', {
       items: [{ candidateId: validBundle.id, quantity: 1 }]
-    })).rejects.toThrow('Combine available simple observed dishes from one restaurant only.');
+    })).rejects.toThrow('Combine available observed dishes from one restaurant only. Configure required choices first.');
   });
 
   it('labels above-listed-budget search and bundle options as hypotheses, then checks delivered budget separately', async () => {

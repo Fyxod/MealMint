@@ -252,6 +252,16 @@ export async function createApp(options: AppOptions = {}) {
     void service.chat(id, text).catch(() => {});
     return reply.code(202).send({ accepted: true });
   });
+  app.get("/api/conversations/:id/customizations/:candidateId", async (req) => {
+    const { id, candidateId } = z.object({ id: z.string().uuid(), candidateId: z.string().max(100) }).parse(req.params);
+    if (service.get(id).busy) throw new Error("Wait for the current operation to finish.");
+    return service.customizationOptions(id, candidateId);
+  });
+  app.post("/api/conversations/:id/customizations/:candidateId", async (req) => {
+    const { id, candidateId } = z.object({ id: z.string().uuid(), candidateId: z.string().max(100) }).parse(req.params);
+    const candidate = service.configure(id, candidateId, req.body);
+    return { candidate, conversation: service.snapshot(id) };
+  });
   app.post("/api/conversations/:id/compare", async (req) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params),
       { candidateIds } = z
