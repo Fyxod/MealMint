@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { FoodService } from "./service.js";
 import type { Address, ChoiceRef, CustomizationDetails, Conversation } from "./types.js";
 import { SecretStore, redact, safeEqual } from "./security.js";
+import { cartPlanLabel } from "./plans.js";
 
 export class TelegramBot {
   private offset = 0;
@@ -378,7 +379,7 @@ export class TelegramBot {
             c.approval.plans
               .map(
                 (x) =>
-                  `${x.name} · ${x.restaurant}\n${c.approval!.request.quantity} ${x.lines ? "bundle(s)" : "item(s)"} · ${x.price === null ? "Subtotal needs cart check" : `₹${(x.price * c.approval!.request.quantity).toFixed(2)} listed subtotal`}`,
+                  `${cartPlanLabel(x, c.approval!.request.quantity)} · ${x.restaurant}\nExact item counts above · ${x.price === null ? "Subtotal needs cart check" : `₹${(x.price * c.approval!.request.quantity).toFixed(2)} listed subtotal`}`,
               )
               .join("\n\n") +
             "\n\nThe test cart will be cleared afterward. No orders will be placed.",

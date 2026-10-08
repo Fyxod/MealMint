@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { cartData, cartFingerprint, cartReceiptFingerprint } from "./cart.js";
+import { cartPlanItems } from "./plans.js";
 import { z } from "zod";
 import type {
   Address,
@@ -93,7 +94,7 @@ export const foodTools: ToolSpec[] = [
     inputSchema: objectSchema({
       budget: { type: ["number", "null"] },
       diet: { type: "string", enum: ["any", "veg", "nonveg"] },
-      quantity: { type: "integer", minimum: 1, maximum: 10 },
+      quantity: { type: "integer", minimum: 1, maximum: 10, description: "Copies of each shortlisted dish or entire bundle. Normally use1 when food_bundle already contains the requested per-item counts; quantity3 repeats its complete contents three times." },
       maxMinutes: { type: ["integer", "null"] },
       excluded: { type: "array", items: { type: "string" } },
     }),
@@ -117,7 +118,7 @@ export const foodTools: ToolSpec[] = [
     type: "function",
     name: "food_bundle",
     description:
-      "Propose a cart with up to five observed configured items from one restaurant. Quantities are per bundle, multiplied by requested quantity. Configure required choices first. Explore quantities and suitable additions that may unlock cheaper coupons. No writes; payable totals and selected customization prices still need approved comparison.",
+      "Propose a cart with up to five observed configured items from one restaurant. Quantities are per bundle, multiplied by request.quantity. Usually set food_preferences.quantity=1 before creating a bundle and put the desired final counts in items. Check returned finalItems against the user's exact counts before food_compare: line quantity3 and request.quantity3 means NINE, not three. Configure required choices first. No writes; final prices need approved comparison.",
     inputSchema: objectSchema(
       {
         items: {
@@ -166,7 +167,7 @@ export const foodTools: ToolSpec[] = [
     type: "function",
     name: "food_compare",
     description:
-      "Request explicit user approval to compare up to three observed candidates. DOES NOT change the cart or place orders.",
+      "Request explicit user approval to compare up to three observed candidates. Verify final per-item quantities match the user's request first. Returns exact frozen plan counts. DOES NOT change the cart or place orders.",
     inputSchema: objectSchema(
       { candidateIds: { ...idsProperty, maxItems: 3 } },
       ["candidateIds"],
@@ -680,7 +681,9 @@ export class FoodService extends EventEmitter {
       this.changed(c);
       return {
         candidate,
-        note: "Proposed cart only, no writes. Listed subtotal may differ from payable total; verify after approval. This bundle is repeated request.quantity times.",
+        finalItems: cartPlanItems(candidate, c.request.quantity),
+        bundleCount: c.request.quantity,
+        note: "Proposed cart only, no writes. finalItems are the actual total quantities, after multiplication. They must match the user's requested counts before comparison. Listed subtotal may differ from payable total; verify after approval.",
       };
     }
     if (name === "food_menu" || name === "food_offers") {
@@ -742,6 +745,7 @@ export class FoodService extends EventEmitter {
           status: approval.status,
           discardExisting: approval.discardExisting,
           selectedCount: approval.candidateIds.length,
+          plans: approval.plans.map(plan => ({ candidateId: plan.id, items: cartPlanItems(plan, approval.request.quantity) })),
           expiresAt: approval.expiresAt,
           note: "The user must approve through the application controls.",
         };

@@ -296,6 +296,56 @@ describe('FoodService', () => {
     expect((await getMockCart(gateway)).data.items).toEqual([]);
   });
 
+  it.each([1, 3])('reports the same exact multiplied quantities to bundle/compare tools, frozen approval and writes (bundleCount=%s)', async bundleCount => {
+    const { gateway, service, conversation } = await readyService();
+    service.updatePreferences(conversation.id, { budget: 1000, quantity: bundleCount });
+    const search = await service.dispatch(conversation.id, 'food_search', { query: 'dosa' });
+    const dosa = search.candidates.find((candidate: any) => candidate.itemId === 'i7');
+    const bundle = await service.dispatch(conversation.id, 'food_bundle', { items: [{ candidateId: dosa.id, quantity: 3 }] });
+    const expected = [{ itemId: 'i7', name: 'Plain dosa', quantity: 3 * bundleCount }];
+    expect(bundle.finalItems).toEqual(expected);
+    expect(bundle.bundleCount).toBe(bundleCount);
+    const toolApproval = await service.dispatch(conversation.id, 'food_compare', { candidateIds: [bundle.candidate.id] });
+    expect(toolApproval.plans).toEqual([{ candidateId: bundle.candidate.id, items: expected }]);
+    const approval = conversation.approval!;
+    expect(approval.request.quantity).toBe(bundleCount);
+    expect(approval.plans[0].lines?.[0].quantity).toBe(3);
+    // Later registry edits must not change what the user already approved.
+    bundle.candidate.lines[0].quantity = 1;
+    bundle.candidate.lines[0].name = 'Unapproved changed description';
+    const calls = vi.spyOn(gateway, 'call');
+    const result = await service.approve(conversation.id, approval.id);
+    expect(result.error).toBeNull();
+    expect(result.approval?.status).toBe('done');
+    const writes = calls.mock.calls.filter(([name]) => name === 'update_food_cart');
+    expect(writes.length).toBeGreaterThan(0);
+    expect(writes.every(([, args]) => JSON.stringify(args.cartItems) === JSON.stringify([{ menuItemId: 'i7', quantity: 3 * bundleCount }]))).toBe(true);
+    expect(bundle.finalItems).toEqual(expected);
+    expect(toolApproval.plans[0].items).toEqual(expected);
+    expect((await getMockCart(gateway)).data.items).toEqual([]);
+  });
+
+  it('exposes exact mixed-line final counts rather than only the number of bundles', async () => {
+    const { gateway, service, conversation } = await readyService();
+    service.updatePreferences(conversation.id, { budget: 1000, quantity: 2 });
+    const search = await service.dispatch(conversation.id, 'food_search', { query: 'dosa idli' });
+    const dosa = search.candidates.find((candidate: any) => candidate.itemId === 'i7');
+    const idli = search.candidates.find((candidate: any) => candidate.itemId === 'i8');
+    const bundle = await service.dispatch(conversation.id, 'food_bundle', { items: [{ candidateId: dosa.id, quantity: 2 }, { candidateId: idli.id, quantity: 1 }] });
+    const expected = [{ itemId: 'i7', name: 'Plain dosa', quantity: 4 }, { itemId: 'i8', name: 'Idli with sambar', quantity: 2 }];
+    expect(bundle.finalItems).toEqual(expected);
+    expect(bundle.bundleCount).toBe(2);
+    const toolApproval = await service.dispatch(conversation.id, 'food_compare', { candidateIds: [bundle.candidate.id] });
+    expect(toolApproval.plans).toEqual([{ candidateId: bundle.candidate.id, items: expected }]);
+    const calls = vi.spyOn(gateway, 'call');
+    const result = await service.approve(conversation.id, conversation.approval!.id);
+    expect(result.error).toBeNull();
+    const writes = calls.mock.calls.filter(([name]) => name === 'update_food_cart');
+    expect(writes.length).toBeGreaterThan(0);
+    expect(writes.every(([, args]) => JSON.stringify(args.cartItems) === JSON.stringify([{ menuItemId: 'i7', quantity: 4 }, { menuItemId: 'i8', quantity: 2 }]))).toBe(true);
+    expect((await getMockCart(gateway)).data.items).toEqual([]);
+  });
+
   it('picks the lowest payable total from all eligible non-payment coupons', async () => {
     const { gateway, service, conversation } = await readyService();
     service.updatePreferences(conversation.id, { budget: 230, diet: 'veg' });

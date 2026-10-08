@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import type { Address, Candidate, ChoiceRef, CustomizationDetails, Conversation, UserDirective } from "../src/types";
+import { cartPlanLabel } from "../src/plans";
 
 const money = (n: number | null) =>
   n === null
@@ -820,11 +821,10 @@ export function App() {
             <ul className="approval-plans">
               {chat.approval.plans.map((plan) => (
                 <li key={plan.id}>
-                  <strong>{plan.name}</strong>
+                  <strong>{cartPlanLabel(plan, chat.approval!.request.quantity)}</strong>
                   <small>
-                    {plan.restaurant} · {chat.request.quantity}{" "}
-                    {plan.lines ? "bundle(s)" : "item(s)"} ·{" "}
-                    {money(plan.price === null ? null : plan.price * chat.request.quantity)} listed
+                    {plan.restaurant} · Exact item counts above ·{" "}
+                    {money(plan.price === null ? null : plan.price * chat.approval!.request.quantity)} listed
                   </small>
                 </li>
               ))}

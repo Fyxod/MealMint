@@ -467,6 +467,47 @@ describe('TelegramBot', () => {
     expect(shortlistMessages).toHaveLength(2);
   });
 
+  it.each([1, 3])('shows actual final food counts in approval for three-item bundles repeated %s times', async bundleCount => {
+    const runtime = createBot();
+    await pair(runtime);
+    await runtime.bot.handle(message(ownerId, '/addresses'));
+    await runtime.bot.handle(callback(ownerId, addressCallback(runtime)));
+    const c = [...runtime.service.conversations.values()][0];
+    runtime.service.updatePreferences(c.id, { budget: 1000, quantity: bundleCount });
+    const search = await runtime.service.dispatch(c.id, 'food_search', { query: 'dosa' });
+    const dosa = search.candidates.find((candidate: any) => candidate.itemId === 'i7');
+    const bundle = await runtime.service.dispatch(c.id, 'food_bundle', { items: [{ candidateId: dosa.id, quantity: 3 }] });
+    const foodCalls = vi.spyOn(runtime.gateway, 'call');
+    await runtime.bot.handle(callback(ownerId, `compare:${bundle.candidate.id}`, 'exact-bundle-approval'));
+    const prompt = runtime.calls.filter(call => call.method === 'sendMessage' && String(call.body.text).startsWith('Check these exact options')).at(-1)!;
+    expect(prompt.body.text).toContain(`${3 * bundleCount} × Plain dosa`);
+    expect(prompt.body.text).toContain('Exact item counts above');
+    expect(prompt.body.text).not.toContain(`${bundleCount} bundle(s)`);
+    expect(prompt.body.text).not.toContain(`${bundleCount} item(s)`);
+    if (bundleCount === 3) expect(prompt.body.text).not.toContain('3 × Plain dosa');
+    expect(c.approval?.request.quantity).toBe(bundleCount);
+    expect(c.approval?.plans[0].lines?.[0].quantity).toBe(3);
+    expect(foodCalls.mock.calls.some(([name]) => ['update_food_cart', 'flush_food_cart', 'apply_food_coupon'].includes(name))).toBe(false);
+  });
+
+  it('shows final quantities for every mixed-bundle line in the approval message', async () => {
+    const runtime = createBot();
+    await pair(runtime);
+    await runtime.bot.handle(message(ownerId, '/addresses'));
+    await runtime.bot.handle(callback(ownerId, addressCallback(runtime)));
+    const c = [...runtime.service.conversations.values()][0];
+    runtime.service.updatePreferences(c.id, { budget: 1000, quantity: 2 });
+    const search = await runtime.service.dispatch(c.id, 'food_search', { query: 'dosa idli' });
+    const dosa = search.candidates.find((candidate: any) => candidate.itemId === 'i7');
+    const idli = search.candidates.find((candidate: any) => candidate.itemId === 'i8');
+    const bundle = await runtime.service.dispatch(c.id, 'food_bundle', { items: [{ candidateId: dosa.id, quantity: 2 }, { candidateId: idli.id, quantity: 1 }] });
+    await runtime.bot.handle(callback(ownerId, `compare:${bundle.candidate.id}`, 'exact-mixed-approval'));
+    const prompt = runtime.calls.filter(call => call.method === 'sendMessage' && String(call.body.text).startsWith('Check these exact options')).at(-1)!;
+    expect(prompt.body.text).toContain('4 × Plain dosa + 2 × Idli with sambar');
+    expect(prompt.body.text).not.toContain('2 bundle(s)');
+    expect(c.approval?.status).toBe('pending');
+  });
+
   it('saves a Telegram preference before address selection and exposes it to a web conversation', async () => {
     let telegramContext: any;
     const agent: AgentProvider = {
