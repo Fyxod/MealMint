@@ -13,15 +13,17 @@ const cart = () => ({ data: {
 } });
 
 describe('cart receipts versus concurrency fingerprints', () => {
-  it('ignores only unselected catalog changes for a receipt, without weakening ordinary concurrency detection', () => {
+  it('ignores unselected catalog churn in both receipt and concurrency checks', () => {
     const before = cart(), after = cart();
     after.data.items[0].valid_addons[0].choices = [{ id: 'new-option', name: 'Different unselected topping', price: 45 }];
     expect(cartReceiptFingerprint(before, 'synthetic-r')).toBe(cartReceiptFingerprint(after, 'synthetic-r'));
-    expect(cartFingerprint(before)).not.toBe(cartFingerprint(after));
+    expect(cartFingerprint(before)).toBe(cartFingerprint(after));
   });
 
-  it.each(['quantity', 'stock', 'price', 'addon', 'variant', 'coupon', 'payable'])('retains selected cart %s changes in the authoritative receipt', change => {
+  it.each(['item', 'quantity', 'stock', 'price', 'addon', 'variant', 'coupon', 'payable', 'restaurant'])('detects selected cart %s changes in both concurrency and receipt checks', change => {
     const before = cart(), after: any = cart();
+    if (change === 'item') after.data.items[0].menu_item_id = 'different-item';
+    if (change === 'restaurant') after.data.restaurant = { id: 'different-restaurant' };
     if (change === 'quantity') after.data.items[0].quantity = 3;
     if (change === 'stock') after.data.items[0].in_stock = 1;
     if (change === 'price') after.data.items[0].final_price = 101;
@@ -30,6 +32,7 @@ describe('cart receipts versus concurrency fingerprints', () => {
     if (change === 'coupon') after.data.offers.coupon_applied = 'EXTERNAL';
     if (change === 'payable') after.data.pricing.to_pay = 221;
     expect(cartReceiptFingerprint(before, 'synthetic-r')).not.toBe(cartReceiptFingerprint(after, 'synthetic-r'));
+    expect(cartFingerprint(before)).not.toBe(cartFingerprint(after));
   });
 
   it('binds a missing restaurant identity to the write request and preserves explicit identity disagreement', () => {

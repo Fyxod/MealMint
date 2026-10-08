@@ -877,7 +877,7 @@ describe('FoodService exact retained out-of-stock cart cleanup', () => {
 
 
 describe('FoodService authoritative unavailable-write receipts', () => {
-  it('accepts a fresh unselected add-on catalog while preserving the full concurrency fingerprint', async () => {
+  it('accepts a fresh unselected add-on catalog without treating possible choices as cart changes', async () => {
     const { gateway, service, c, approval } = await retainedUnavailableSetup();
     gateway.mutate = 'missing-restaurant';
     const original = gateway.call.bind(gateway);
@@ -891,7 +891,7 @@ describe('FoodService authoritative unavailable-write receipts', () => {
         writeFingerprint = cartFingerprint(writeCart);
         gateway.items[0].valid_addons = [{ groupId: 'new-catalog-group', groupName: 'Refreshed choices', maxAddons: 2,
           choices: [{ id: 'new-catalog-choice', name: 'Synthetic new possible topping', price: 45 }] }];
-        expect(cartFingerprint(gateway.cart())).not.toBe(writeFingerprint);
+        expect(cartFingerprint(gateway.cart())).toBe(writeFingerprint);
         expect(cartReceiptFingerprint(gateway.cart(), 'synthetic-r')).toBe(receipt);
         throw new SwiggyResponseError('UNAVAILABLE', receipt);
       }
@@ -988,5 +988,87 @@ describe('FoodService authoritative unavailable-write receipts', () => {
     expect(result.quotes).toEqual([]);
     expect(gateway.items.length).toBeGreaterThan(0);
     expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(1);
+  });
+});
+
+
+describe('FoodService final cleanup with changing unused addon catalogs', () => {
+  it('completes and clears a verified cart when each fresh cart read returns a different unused catalog', async () => {
+    const { gateway, service, c, candidates } = await setup();
+    let nonemptyReads = 0;
+    const original = gateway.call.bind(gateway);
+    gateway.call = async (name, args) => {
+      if (name === 'get_food_cart' && gateway.items.length) {
+        nonemptyReads++;
+        gateway.items[0].valid_addons = [{ groupId: `catalog-${nonemptyReads}`, choices: [
+          { id: `possible-${nonemptyReads}`, name: `Synthetic unselected option ${nonemptyReads}`, price: nonemptyReads * 5 },
+        ] }];
+      }
+      return original(name, args);
+    };
+    const regular = candidates.find(candidate => candidate.itemId === 'regular')!;
+    const approval = await service.requestComparison(c.id, [regular.id]);
+    const result = await service.approve(c.id, approval.id);
+    expect(nonemptyReads).toBeGreaterThanOrEqual(2);
+    expect(result.error).toBeNull();
+    expect(result.approval?.status).toBe('done');
+    expect(result.quotes[0]).toMatchObject({ itemTotal: 70, total: 90 });
+    expect(gateway.items).toEqual([]);
+    expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(2);
+  });
+
+  async function unavailableWithChurn(change?: string) {
+    const { gateway, service, c, approval } = await retainedUnavailableSetup();
+    gateway.mutate = 'missing-restaurant';
+    const original = gateway.call.bind(gateway);
+    let nonemptyReads = 0;
+    gateway.call = async (name, args) => {
+      if (name === 'get_food_cart' && gateway.items.length) {
+        nonemptyReads++;
+        gateway.items[0].valid_addons = [{ groupId: `changing-catalog-${nonemptyReads}`, choices: [
+          { id: `possible-${nonemptyReads}`, name: `Unused synthetic possibility ${nonemptyReads}`, price: 10 + nonemptyReads },
+        ] }];
+        // The first read proves the exact retained submission. These changes
+        // happen afterward, just before the final concurrency check/cleanup.
+        if (nonemptyReads === 2) {
+          if (change === 'addon') gateway.items[0].addons.push({ group_id: 'extra', choice_id: 'unrequested' });
+          if (change === 'variant') gateway.items[0].variants.push({ group_id: 'size', variation_id: 'unrequested' });
+          if (change === 'item') gateway.items[0].menu_item_id = 'unrequested-item';
+          if (change === 'quantity') gateway.items[0].quantity++;
+          if (change === 'price') gateway.items[0].total++;
+          if (change === 'coupon') gateway.coupon = 'EXTERNAL';
+          if (change === 'stock') gateway.items[0].in_stock = true;
+          if (change === 'restaurant') gateway.mutate = 'wrong-restaurant';
+        }
+      }
+      try { return await original(name, args); }
+      catch (error) {
+        if (name === 'update_food_cart' && error instanceof SwiggyResponseError)
+          throw new SwiggyResponseError('UNAVAILABLE', cartReceiptFingerprint(gateway.cart(), 'synthetic-r'));
+        throw error;
+      }
+    };
+    const result = await service.approve(c.id, approval.id);
+    return { gateway, result, nonemptyReads };
+  }
+
+  it('clears an exact unavailable submission even when both recovery and final cleanup reads have fresh unused catalogs', async () => {
+    const { gateway, result, nonemptyReads } = await unavailableWithChurn();
+    expect(nonemptyReads).toBe(2);
+    expect(result.error).toContain('no longer available');
+    expect(result.error).not.toContain('could not be safely cleared');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.items).toEqual([]);
+    expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(2);
+  });
+
+  it.each(['addon', 'variant', 'item', 'quantity', 'price', 'coupon', 'stock', 'restaurant'])('preserves a cart whose actual %s changes before final cleanup despite unrelated catalog churn', async change => {
+    const { gateway, result, nonemptyReads } = await unavailableWithChurn(change);
+    expect(nonemptyReads).toBe(2);
+    expect(result.error).toContain('could not be safely cleared');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.items).toHaveLength(2);
+    expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(1);
+    expect(gateway.calls.filter(call => call.name === 'update_food_cart')).toHaveLength(1);
   });
 });

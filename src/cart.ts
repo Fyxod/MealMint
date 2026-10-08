@@ -8,17 +8,20 @@ export function cartFingerprint(raw: any) {
   const c = cartData(raw);
   return createHash("sha256").update(JSON.stringify({
     restaurant: c?.restaurant?.id ?? c?.restaurant?.restaurant_id ?? c?.restaurant?.restaurantId ?? null,
-    items: c?.items ?? [], offers: c?.offers ?? null, total: c?.pricing?.to_pay ?? null,
+    // valid_addons is the catalog of possible extras, not selected cart food.
+    // Swiggy can reorder/change it between successive reads. Selected addons,
+    // variants, quantities, prices and stock remain part of the fingerprint.
+    items: Array.isArray(c?.items) ? c.items.map(({ valid_addons, ...item }: any) => item) : c?.items ?? [],
+    offers: c?.offers ?? null, total: c?.pricing?.to_pay ?? null,
   })).digest("hex");
 }
 
-// The write and read endpoints can return different unselected add-on catalogs.
-// Keep the full selected cart state, prices and offers in this receipt, excluding
-// only valid_addons (which lists possibilities, not what is in the cart).
+// Bind a missing restaurant identity to the authoritative write request. Both
+// receipt and concurrency checks compare selected cart state, excluding only
+// the unused valid_addons catalog.
 export function cartReceiptFingerprint(raw: any, restaurantId: string) {
   const c = cartData(raw);
   return cartFingerprint({ ...c,
     restaurant: { id: String(c?.restaurant?.id ?? c?.restaurant?.restaurant_id ?? c?.restaurant?.restaurantId ?? restaurantId) },
-    items: (c?.items ?? []).map(({ valid_addons, ...item }: any) => item),
   });
 }
