@@ -101,7 +101,7 @@ export const foodTools: ToolSpec[] = [
     type: "function",
     name: "food_search",
     description:
-      "Search dishes across restaurants for a query. Use budgetCollection for ₹99 storefront. Returns filtered candidates and pagination; final fees not yet known.",
+      "Search dishes across restaurants for a query. Returns filtered candidates and pagination; final fees not yet known. budgetCollection is synthetic-only and unsupported by the live gateway.",
     inputSchema: objectSchema(
       {
         query: { type: "string" },
@@ -362,9 +362,14 @@ export class FoodService extends EventEmitter {
       });
       c.status = "Ready";
     } catch (e) {
-      c.error = redact((e as Error).message);
-      c.status = "Needs attention";
-      this.emit("event", { type: "error", conversationId: id, text: c.error });
+      if (this.cancelled.has(id)) {
+        c.error = null;
+        c.status = "Ready";
+      } else {
+        c.error = redact((e as Error).message);
+        c.status = "Needs attention";
+        this.emit("event", { type: "error", conversationId: id, text: c.error });
+      }
     } finally {
       c.busy = false;
       c.messages = c.messages.slice(-40);
@@ -377,7 +382,7 @@ export class FoodService extends EventEmitter {
     this.cancelled.add(id);
     if (c.approval?.status === "pending") c.approval.status = "cancelled";
     await this.agent.cancel(id);
-    this.status(c, "Stopping");
+    this.status(c, c.busy ? "Stopping" : "Ready");
   }
   private async read(id: string, name: string, args: Record<string, unknown>) {
     if (this.cancelled.has(id)) throw new Error("Search cancelled.");
@@ -399,11 +404,15 @@ export class FoodService extends EventEmitter {
   }
   async customizationOptions(id: string, candidateId: string) {
     const c = this.get(id), candidate = this.observed(id, candidateId);
+    // A manual edit starts a fresh operation after a completed cancellation.
+    if (!c.busy) this.cancelled.delete(id);
     if (candidate.lines || !c.request.addressId) throw new Error("Configure individual dishes before combining them.");
+    const addressId = c.request.addressId;
     const raw = await this.read(id, "search_menu", {
-      addressId: c.request.addressId, restaurantIdOfAddedItem: candidate.restaurantId,
+      addressId, restaurantIdOfAddedItem: candidate.restaurantId,
       query: candidate.originalName ?? candidate.name,
     });
+    if (c.request.addressId !== addressId) throw new Error("Delivery address changed. Open the choices again.");
     const item = (raw.items ?? raw.dishes ?? []).find((x: any) => String(x.menu_item_id ?? x.id) === candidate.itemId);
     if (!item || !(item.inStock === 1 || item.inStock === true)) throw new Error("This dish is no longer available. Search again.");
     const details = customizationDetails(item);
@@ -438,6 +447,8 @@ export class FoodService extends EventEmitter {
     c.candidates = [...c.candidates.filter(x => x.id !== candidateId && x.id !== configuredId), configured].slice(-6);
     if (c.approval?.status === "pending") c.approval.status = "cancelled";
     c.quotes = [];
+    c.error = null;
+    if (!c.busy) c.status = "Ready";
     this.changed(c);
     return configured;
   }
@@ -526,6 +537,7 @@ export class FoodService extends EventEmitter {
           qualifies(x, c.request),
         ),
         quotes: c.quotes,
+        lastComparison: c.comparison ?? null,
         approval: c.approval ? { status: c.approval.status } : null,
         coverage: c.coverage,
         source: this.gateway.mode,
@@ -709,7 +721,7 @@ export class FoodService extends EventEmitter {
       if (name === "food_offers")
         return {
           offers: raw,
-          note: "Contextual visibility, not verified savings. Applicability may refer to the current cart; proposed items or thresholds can change eligibility. Check the proposed cart through approved comparison. Payment-only offers unverified.",
+          note: "Contextual visibility, not verified savings. The current gateway filters to cash-on-delivery-compatible coupons; online/card-only offers may be absent. Applicability may refer to the current cart; proposed items or thresholds can change eligibility. Check the proposed cart through approved comparison. Payment-only offers unverified.",
         };
       return {
         candidates: this.register(
@@ -831,6 +843,7 @@ export class FoodService extends EventEmitter {
     c.error = null;
     c.quotes = [];
     this.cartBusy = true;
+    c.comparison = { requested: a.candidateIds.length, checked: 0, issues: [], cancelled: false };
     this.cancelled.delete(id);
     this.changed(c);
     let expected: string | null = null;
@@ -897,10 +910,12 @@ export class FoodService extends EventEmitter {
         }
         const best = trials.sort((a, b) => a.total - b.total)[0];
         c.quotes.push(best);
+        c.comparison.checked = c.quotes.length;
         this.changed(c);
       }
       c.quotes.sort((a, b) => a.total - b.total);
       a.status = this.cancelled.has(id) ? "cancelled" : "done";
+      c.comparison.cancelled = this.cancelled.has(id);
       c.messages.push({
         id: randomUUID(),
         role: "assistant",
@@ -911,7 +926,10 @@ export class FoodService extends EventEmitter {
       });
     } catch (e) {
       c.error = redact((e as Error).message);
+      c.comparison.issues.push(c.error);
       a.status = "cancelled";
+      c.messages.push({ id: randomUUID(), role: "assistant", timestamp: new Date().toISOString(),
+        text: `Comparison incomplete: ${c.quotes.length} of ${a.candidateIds.length} selected options were checked. ${c.error} Results apply only to successfully checked configurations.` });
     } finally {
       if (expected) {
         try {
@@ -919,6 +937,7 @@ export class FoodService extends EventEmitter {
           await this.gateway.call("flush_food_cart", {});
         } catch {
           c.error = `${c.error ? c.error + " " : ""}The test cart could not be safely cleared. Please inspect it in Swiggy.`;
+          c.comparison.issues.push("The test cart could not be safely cleared. Please inspect it in Swiggy.");
         }
       }
       this.cartBusy = false;

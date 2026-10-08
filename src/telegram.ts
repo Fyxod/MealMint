@@ -9,6 +9,7 @@ export class TelegramBot {
   private owner: number | null = null;
   private code: { value: string; expiresAt: number } | null = null;
   private conversations = new Map<number, string>();
+  private renderedAssistant = new Map<number, string>();
   private abort: AbortController | null = null;
   private username: string | null = null;
   private addressMenu: { nonce: string; choices: Address[]; expiresAt: number } | null = null;
@@ -286,6 +287,7 @@ export class TelegramBot {
       }
       this.service.remove(c.id);
       this.conversations.delete(chat);
+      this.renderedAssistant.delete(chat);
       this.addressMenu = null;
       this.customMenu = null;
       await this.send(chat, "New conversation. Use /addresses first.");
@@ -329,7 +331,10 @@ export class TelegramBot {
   }
   private async render(chat: number, c: Conversation) {
     const last = c.messages.at(-1);
-    if (last?.role === "assistant") await this.send(chat, last.text);
+    if (last?.role === "assistant" && this.renderedAssistant.get(chat) !== last.id) {
+      await this.send(chat, last.text);
+      this.renderedAssistant.set(chat, last.id);
+    }
     if (c.error) await this.send(chat, c.error);
     if (c.quotes.length)
       await this.send(
@@ -340,7 +345,7 @@ export class TelegramBot {
               `${i + 1}. ${q.name} · ${q.restaurant}\n₹${q.total.toFixed(2)} delivered for ${q.quantity} ${q.bundle ? "bundle(s)" : "item(s)"}${q.coupon ? ` · ${q.coupon}${q.discount > 0 ? `, saving ₹${q.discount}` : ""}` : ""}${q.withinBudget ? "" : " · over budget"}`,
           )
           .join("\n\n") +
-          "\n\nLowest among checked options. Refresh before checkout.",
+          `\n\n${c.comparison && c.comparison.checked < c.comparison.requested ? `Partial comparison: ${c.comparison.checked}/${c.comparison.requested} options checked. ` : ""}Lowest among successfully checked options. Refresh before checkout.`,
       );
     else if (c.candidates.length)
       await this.send(

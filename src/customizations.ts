@@ -43,16 +43,21 @@ export function customizationDetails(item: any): CustomizationDetails {
   }
   const variants = (modern.length ? modern : [...grouped.values()]).map(x => group(x, true));
   let addons: ChoiceGroup[] = (item.addons ?? []).map((x: any) => group(x, false));
+  if (new Set(addons.map(x => x.id)).size !== addons.length)
+    throw new Error("Ambiguous customization groups.");
   // Some live menus flatten add-on groups from every meal variant. Fixed
   // zero-price "Selected ..." choices represent the item itself, not extras.
   // The server decides which fixed choice belongs to the approved variant.
+  const normalizedName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const baseName = normalizedName(String(item.name ?? ""));
   const fixed = variants.length ? addons.filter(g => g.min === 1 && g.max === 1 &&
     g.choices.length === 1 && g.choices[0].available && g.choices[0].price === 0 &&
-    /^selected\b/i.test(g.choices[0].name)) : [];
+    (/^selected\b/i.test(g.choices[0].name) ||
+      (/^selected\b/i.test(g.name) && baseName.length >= 6 && normalizedName(g.choices[0].name) === baseName))) : [];
   const bootstrap = fixed.map(g => ({ groupId: g.id, choiceId: g.choices[0].id }));
   if (bootstrap.length > 3) throw new Error("Unsupported fixed variant choices. Use another dish.");
   if (bootstrap.length) addons = addons.filter(g => !fixed.includes(g)).map(g => ({ ...g, conditionalMin: g.min, min: 0 }));
-  if (variants.length + addons.length > 30 || (item.hasVariants && !variants.length) || (item.hasAddons && !addons.length))
+  if (variants.length + addons.length + bootstrap.length > 30 || (item.hasVariants && !variants.length) || (item.hasAddons && !addons.length && !bootstrap.length))
     throw new Error("Swiggy did not return complete customization choices. Refresh this dish.");
   if (new Set(variants.map(x => x.id)).size !== variants.length || new Set(addons.map((x: ChoiceGroup) => x.id)).size !== addons.length)
     throw new Error("Ambiguous customization groups.");

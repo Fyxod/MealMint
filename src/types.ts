@@ -106,6 +106,7 @@ export interface Conversation {
   candidates: Candidate[];
   quotes: Quote[];
   approval: Approval | null;
+  comparison?: { requested: number; checked: number; issues: string[]; cancelled: boolean };
   busy: boolean;
   error: string | null;
   status: string;

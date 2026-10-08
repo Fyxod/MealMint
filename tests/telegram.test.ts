@@ -298,6 +298,55 @@ describe('TelegramBot', () => {
     expect(runtime.service.conversations.has(conversation.id)).toBe(false);
   });
 
+  it('does not replay the same assistant message when a comparison button renders the conversation again', async () => {
+    const runtime = createBot();
+    await pair(runtime);
+    await runtime.bot.handle(message(ownerId, '/addresses'));
+    await runtime.bot.handle(callback(ownerId, addressCallback(runtime)));
+    const c = [...runtime.service.conversations.values()][0];
+    runtime.service.updatePreferences(c.id, { budget: 300 });
+    const search = await runtime.service.dispatch(c.id, 'food_search', { query: 'dosa' });
+    const candidateId = search.candidates[0].id;
+    await runtime.service.dispatch(c.id, 'food_present', { candidateIds: [candidateId] });
+    await runtime.bot.handle(message(ownerId, 'Synthetic first request'));
+    await waitFor(() => runtime.calls.some(call => call.method === 'sendMessage' && call.body.text === 'synthetic reply'));
+    await runtime.bot.handle(callback(ownerId, `compare:${candidateId}`, 'first-render'));
+    await runtime.bot.handle(callback(ownerId, `compare:${candidateId}`, 'second-render'));
+    expect(runtime.calls.filter(call => call.method === 'sendMessage' && call.body.text === 'synthetic reply')).toHaveLength(1);
+    await runtime.bot.handle(message(ownerId, 'Synthetic distinct request with same response text'));
+    await waitFor(() => runtime.calls.filter(call => call.method === 'sendMessage' && call.body.text === 'synthetic reply').length === 2);
+    expect(c.messages.filter(item => item.role === 'assistant')).toHaveLength(2);
+  });
+
+  it('labels partial quotes and sends the incomplete assistant explanation once across repeated renders', async () => {
+    const runtime = createBot();
+    await pair(runtime);
+    await runtime.bot.handle(message(ownerId, '/addresses'));
+    await runtime.bot.handle(callback(ownerId, addressCallback(runtime)));
+    const c = [...runtime.service.conversations.values()][0];
+    runtime.service.updatePreferences(c.id, { budget: 300 });
+    const search = await runtime.service.dispatch(c.id, 'food_search', { query: 'dosa idli' });
+    const candidates = search.candidates.slice(0, 2);
+    expect(candidates).toHaveLength(2);
+    await runtime.service.dispatch(c.id, 'food_present', { candidateIds: candidates.map((x: any) => x.id) });
+    const original = runtime.gateway.call.bind(runtime.gateway);
+    vi.spyOn(runtime.gateway, 'call').mockImplementation(async (name, args): Promise<any> => {
+      if (name === 'update_food_cart' && (args.cartItems as any[])?.[0]?.menuItemId === candidates[1].itemId)
+        throw new Error('Synthetic second configuration unavailable.');
+      return original(name, args);
+    });
+    const approval = await runtime.service.requestComparison(c.id, candidates.map((x: any) => x.id));
+    await runtime.bot.handle(callback(ownerId, `approve:${approval.id}`, 'partial-approve'));
+    await waitFor(() => runtime.calls.some(call => call.method === 'sendMessage' && String(call.body.text).includes('Partial comparison: 1/2 options checked.')));
+    expect(c.comparison).toMatchObject({ requested: 2, checked: 1 });
+    const partial = runtime.calls.find(call => call.method === 'sendMessage' && String(call.body.text).includes('Partial comparison:'))!;
+    expect(partial.body.text).toContain('Lowest among successfully checked options.');
+    expect(partial.body.text).not.toContain(candidates[1].name);
+    await runtime.bot.handle(callback(ownerId, `compare:${candidates[0].id}`, 'render-after-incomplete'));
+    expect(runtime.calls.filter(call => call.method === 'sendMessage' && String(call.body.text).startsWith('Comparison incomplete:'))).toHaveLength(1);
+    expect((await runtime.gateway.call('get_food_cart', { addressId: 'mock-home' }) as any).data.items).toEqual([]);
+  });
+
   it('saves a Telegram preference before address selection and exposes it to a web conversation', async () => {
     let telegramContext: any;
     const agent: AgentProvider = {

@@ -16,7 +16,7 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
   StreamableHTTPClientTransport: sdk.Transport
 }));
 
-import { LiveFoodGateway } from '../src/food.js';
+import { LiveFoodGateway, SwiggyResponseError } from '../src/food.js';
 
 const officialTools = [
   'get_addresses', 'search_restaurants', 'search_menu', 'get_restaurant_menu',
@@ -140,6 +140,46 @@ describe('LiveFoodGateway', () => {
 
     await expect(live.call('update_food_cart', { restaurantId: 'synthetic-r1' }))
       .rejects.toThrow('Swiggy request failed. Refresh and try again; writes are never retried automatically.');
+    expect(sdk.client.callTool).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [{ statusCode: 1, errorCodes: ['INVALID_ADDON'] }, 'INVALID_ADDON'],
+    [{ successful: false, errorCodes: ['INVALID_ADDON'] }, 'INVALID_ADDON'],
+    [{ statusCode: 1, errorCodes: ['OUT_OF_STOCK'] }, 'UNAVAILABLE'],
+    [{ successful: false, errorCodes: ['INVALID_ITEM'] }, 'UNAVAILABLE'],
+    [{ statusCode: 1, errorCodes: ['UNRECOGNIZED_INTERNAL_CODE'] }, 'REJECTED'],
+    [{ successful: false }, 'REJECTED'],
+  ] as const)('sanitizes structured provider rejection %# while retaining only a typed reason', async (failure, reason) => {
+    sdk.client.callTool.mockResolvedValue({ structuredContent: {
+      ...failure, sid: 'synthetic-private-sid', tid: 'synthetic-private-tid',
+      statusMessage: 'Raw account diagnostic synthetic-private-status',
+    }, content: [], isError: false });
+    const live = gateway();
+    const error = await live.call('update_food_cart', { restaurantId: 'synthetic-r' }).catch(error => error);
+    expect(error).toBeInstanceOf(SwiggyResponseError);
+    expect(error.reason).toBe(reason);
+    const exposed = [error.message, error.stack, JSON.stringify(error)].join(' ');
+    expect(exposed).not.toMatch(/synthetic-private|UNRECOGNIZED_INTERNAL_CODE/);
+    expect(sdk.client.callTool).toHaveBeenCalledOnce();
+  });
+
+  it('parses a text JSON rejection without exposing provider session identifiers', async () => {
+    sdk.client.callTool.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({
+      successful: false, errorCodes: ['INVALID_ADDON'], sid: 'synthetic-private-sid', tid: 'synthetic-private-tid',
+    }) }], isError: false });
+    const error = await gateway().call('update_food_cart', {}).catch(error => error);
+    expect(error).toBeInstanceOf(SwiggyResponseError);
+    expect(error.reason).toBe('INVALID_ADDON');
+    expect(error.message).not.toMatch(/synthetic-private/);
+    expect(sdk.client.callTool).toHaveBeenCalledOnce();
+  });
+
+  it('does not infer an addon rejection from raw text in a transport error', async () => {
+    sdk.client.callTool.mockRejectedValueOnce(new Error('INVALID_ADDON sid=synthetic-private-sid tid=synthetic-private-tid'));
+    const error = await gateway().call('update_food_cart', {}).catch(error => error);
+    expect(error).not.toBeInstanceOf(SwiggyResponseError);
+    expect(error.message).not.toMatch(/synthetic-private|INVALID_ADDON/);
     expect(sdk.client.callTool).toHaveBeenCalledOnce();
   });
 

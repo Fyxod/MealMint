@@ -101,3 +101,111 @@ describe('synthetic customization contract', () => {
     expect(() => validateCartAddons(selection(), variantSpecific)).toThrow(/unavailable/);
   });
 });
+
+// Synthetic flattened meal menu: each zero-price fixed choice identifies a
+// possible variant; the side groups describe alternatives, not all required extras.
+function flattenedMenu() {
+  return { ...modernItem(), addons: [
+    { groupId: 'fixed-burger', groupName: 'Item', minAddons: 1, maxAddons: 1,
+      choices: [{ id: 'selected-burger', name: 'Selected burger', price: 0, inStock: 1 }] },
+    { groupId: 'fixed-meal', groupName: 'Item', minAddons: 1, maxAddons: 1,
+      choices: [{ id: 'selected-meal', name: 'Selected meal', price: 0, inStock: 1 }] },
+    { groupId: 'drink', groupName: 'Meal drink', minAddons: 1, maxAddons: 1,
+      choices: [{ id: 'water', name: 'Water', price: 10, inStock: 1 }] },
+    { groupId: 'side', groupName: 'Meal side', minAddons: 1, maxAddons: 1,
+      choices: [{ id: 'fries', name: 'Fries', price: 20, inStock: 1 }] },
+  ] };
+}
+
+describe('synthetic fixed variant bootstrap choices', () => {
+  it('hides only structural fixed groups and preserves conditional minimums without demanding every meal extra', () => {
+    const details = customizationDetails(flattenedMenu());
+    expect(details.bootstrap).toEqual([{ groupId: 'fixed-burger', choiceId: 'selected-burger' }, { groupId: 'fixed-meal', choiceId: 'selected-meal' }]);
+    expect(details.addons.map(x => x.id)).toEqual(['drink', 'side']);
+    expect(details.addons.map(x => ({ min: x.min, conditionalMin: x.conditionalMin, max: x.max }))).toEqual([
+      { min: 0, conditionalMin: 1, max: 1 }, { min: 0, conditionalMin: 1, max: 1 },
+    ]);
+    const selected = selectCustomizations(details, [size()], []);
+    expect(selected.bootstrap).toEqual(details.bootstrap);
+    expect(selected.addons).toEqual([]);
+    expect(() => validateCartAddons(selected, flattenedMenu().addons)).not.toThrow();
+  });
+
+  it('allows only explicitly approved bootstrap references in the returned cart', () => {
+    const selected = selectCustomizations(customizationDetails(flattenedMenu()), [size()], []);
+    const cart = { variantsV2: [{ group_id: 'size', variation_id: 'small' }], addons: [{ group_id: 'fixed-burger', choice_id: 'selected-burger' }] };
+    expect(selectionsMatch(selected, cart)).toBe(true);
+    expect(selectionsMatch(selected, { ...cart, addons: [...cart.addons, { group_id: 'drink', choice_id: 'water' }] })).toBe(false);
+    expect(selectionsMatch(selected, { ...cart, addons: [{ group_id: 'fixed-burger', choice_id: 'unapproved' }] })).toBe(false);
+    expect(selectionsMatch(selected, { ...cart, addons: [{ group_id: 'foreign-group', choice_id: 'selected-burger' }] })).toBe(false);
+  });
+
+  it.each(['paid', 'optional', 'not-selected', 'unavailable', 'no-variants'])('does not hide a normal %s add-on as a structural seed', kind => {
+    const menu: any = flattenedMenu();
+    menu.addons = [menu.addons[0], menu.addons[2]];
+    if (kind === 'paid') menu.addons[0].choices[0].price = 1;
+    if (kind === 'optional') menu.addons[0].minAddons = 0;
+    if (kind === 'not-selected') menu.addons[0].choices[0].name = 'Extra sauce';
+    if (kind === 'unavailable') menu.addons[0].choices[0].inStock = 0;
+    if (kind === 'no-variants') { menu.hasVariants = false; menu.variantsV2 = []; }
+    const details = customizationDetails(menu);
+    expect(details.bootstrap).toBeUndefined();
+    expect(details.addons.map(x => x.id)).toContain('fixed-burger');
+    expect(details.addons.find(x => x.id === 'drink')?.min).toBe(1);
+  });
+
+  it('accepts a complete variant menu containing only structural fixed choices and no optional extras', () => {
+    const menu = flattenedMenu();
+    menu.addons = menu.addons.slice(0, 2);
+    const details = customizationDetails(menu);
+    expect(details.addons).toEqual([]);
+    expect(details.bootstrap).toHaveLength(2);
+    expect(selectCustomizations(details, [size()], []).addons).toEqual([]);
+  });
+
+  it('rejects duplicate structural groups so fixed-choice retries cannot repeat an identical payload', () => {
+    const menu = flattenedMenu();
+    menu.addons[1] = structuredClone(menu.addons[0]);
+    expect(() => customizationDetails(menu)).toThrow(/Ambiguous/);
+  });
+
+  it('bounds fixed alternatives to three before any writes are possible', () => {
+    const menu = flattenedMenu();
+    menu.addons = Array.from({ length: 4 }, (_, i) => ({ ...menu.addons[0], groupId: `fixed-${i}` }));
+    expect(() => customizationDetails(menu)).toThrow(/Unsupported fixed/);
+  });
+});
+
+describe('synthetic selected-group base-item recognition', () => {
+  function menu() {
+    return { ...modernItem(), name: 'Synthetic Makhani Burger', addons: [
+      { groupId: 'base-item', groupName: 'Selected burger', minAddons: 1, maxAddons: 1,
+        choices: [{ id: 'makhani', name: 'Synthetic Makhani Burger', price: 0, inStock: 1 }] },
+      { groupId: 'drink', groupName: 'Selected beverage', minAddons: 1, maxAddons: 1,
+        choices: [{ id: 'coke', name: 'Coke', price: 0, inStock: 1 }] },
+    ] };
+  }
+  it('recognizes a Selected group whose single zero-price choice is the actual base dish', () => {
+    const details = customizationDetails(menu());
+    expect(details.bootstrap).toEqual([{ groupId: 'base-item', choiceId: 'makhani' }]);
+    expect(details.addons.map(group => group.id)).toEqual(['drink']);
+    const selected = selectCustomizations(details, [size()], []);
+    const cart = { variants: [{ group_id: 'size', variation_id: 'small' }], addons: [{ group_id: 'base-item', choice_id: 'makhani' }] };
+    expect(selectionsMatch(selected, cart)).toBe(true);
+    expect(selectionsMatch(selected, { ...cart, addons: [...cart.addons, { group_id: 'drink', choice_id: 'coke' }] })).toBe(false);
+  });
+  it('normalizes case, spaces and punctuation when matching the structural choice to the base dish', () => {
+    const fixture = menu();
+    fixture.addons[0].choices[0].name = 'SYNTHETIC Makhani-Burger!';
+    expect(customizationDetails(fixture).bootstrap).toEqual([{ groupId: 'base-item', choiceId: 'makhani' }]);
+  });
+  it.each(['different-name', 'not-selected-group', 'paid'])('keeps a %s group as an explicit choice', kind => {
+    const fixture = menu();
+    if (kind === 'different-name') fixture.addons[0].choices[0].name = 'Synthetic Makhani Burger Meal';
+    if (kind === 'not-selected-group') fixture.addons[0].groupName = 'Choose burger';
+    if (kind === 'paid') fixture.addons[0].choices[0].price = 5;
+    const details = customizationDetails(fixture);
+    expect(details.bootstrap).toBeUndefined();
+    expect(details.addons.map(group => group.id)).toEqual(['base-item', 'drink']);
+  });
+});

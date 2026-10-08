@@ -43,6 +43,7 @@ export function App() {
   } | null>(null);
   const [token, setToken] = useState(""),
     [error, setError] = useState("");
+  const [dismissedError, setDismissedError] = useState<string | null>(null);
   const [chat, setChat] = useState<Conversation | null>(null),
     [addresses, setAddresses] = useState<Address[]>([]),
     [status, setStatus] = useState<any>(null);
@@ -101,6 +102,7 @@ export function App() {
   }
   const attempt = async (fn: () => Promise<any>) => {
     setError("");
+    setDismissedError(null);
     try {
       await fn();
     } catch (e) {
@@ -370,11 +372,11 @@ export function App() {
               : "From your saved Swiggy addresses"}
           </span>
         </div>
-        {(error || chat?.error) && (
+        {(error || chat?.error) && dismissedError !== (error || chat?.error) && (
           <div className="error" role="alert">
             <CircleHelp size={17} />
             <span>{error || chat?.error}</span>
-            <button aria-label="Dismiss error" onClick={() => setError("")}>
+            <button aria-label="Dismiss error" onClick={() => { setDismissedError(error || chat?.error || null); setError(""); }}>
               <X size={16} />
             </button>
           </div>
@@ -554,7 +556,9 @@ export function App() {
                           ? "Demo totals checked"
                           : "Delivered totals checked"}
                       </strong>
-                      <p>Lowest among your selected options.</p>
+                      <p>{chat.comparison && chat.comparison.checked < chat.comparison.requested
+                        ? `Partial comparison: ${chat.comparison.checked}/${chat.comparison.requested} options checked. Lowest among successful checks.`
+                        : "Lowest among successfully checked options."}</p>
                     </div>
                   </div>
                   {chat.quotes.map((q, i) => (
