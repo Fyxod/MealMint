@@ -52,3 +52,11 @@ Current source runtime 5078ba4 passes typecheck, 73 tests and production build. 
 ## October 8 live follow-up
 
 178 synthetic tests/12 files, typecheck and production build passed for d53d9fe. Controlled real web/Telegram agent runs use gpt-6-luna/max and are documented separately in [LIVE_VALIDATION.md](LIVE_VALIDATION.md); synthetic success is not a claim of every live scenario or real coupon savings.
+
+## Final October 8 receipt and cart-state verification
+
+Source1403bf6 passes248 synthetic tests/13files, typecheck and production build. [CI37803358065](https://github.com/Fyxod/MealMint/actions/runs/37803358065) succeeded with clean install, checks, strict memory validation and dependency audit. Actual final Luna max web unavailable-cart recovery and independent empty-cart verification passed after fixing unused catalog churn. Prior seven positive web/Telegram payable checks, directives, manual choices, cancellation and stale controls are documented in [LIVE_VALIDATION.md](LIVE_VALIDATION.md), with honest remaining coupon/mobile coverage limits. No real coupon savings or global-cheapest guarantee is claimed.
+
+## Completed live checkpoint — 2026-10-09
+
+Source cc481a6 and [CI37842829952](https://github.com/Fyxod/MealMint/actions/runs/37842829952) pass 260 tests/14 files, typecheck, build, memory validation and audit. Actual Luna max retests verify exactly three burgers/₹267.00 via Telegram, correct web total-count approval and phone390×844 approval/visible buttons without overflow. Final official cart read confirms empty; saved QA directives0 and all connections working. Source1403bf6 already verified automatic cleanup of an unavailable approved cart. Detailed results, protected evidence paths, earlier failures and the unproven real-coupon outcome are in [LIVE_VALIDATION.md](LIVE_VALIDATION.md). Current test stage is complete; account data and screenshots are not public fixtures.
