@@ -559,6 +559,7 @@ export function App() {
                       <p>{chat.comparison && chat.comparison.checked < chat.comparison.requested
                         ? `Partial comparison: ${chat.comparison.checked}/${chat.comparison.requested} options checked. Lowest among successful checks.`
                         : "Lowest among successfully checked options."}</p>
+                      {!!chat.comparison?.issues.length && <p>{chat.comparison.issues.join(" ")}</p>}
                     </div>
                   </div>
                   {chat.quotes.map((q, i) => (

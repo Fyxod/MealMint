@@ -865,6 +865,15 @@ export class FoodService extends EventEmitter {
         expected = cartFingerprint(baseline);
         const baselineQuote = this.quote(c, x, baseline);
         trials.push(baselineQuote);
+        const recordBest = () => {
+          const best = [...trials].sort((a, b) => a.total - b.total)[0];
+          const index = c.quotes.findIndex(q => q.candidateId === x.id);
+          if (index < 0) c.quotes.push(best); else c.quotes[index] = best;
+          c.comparison!.checked = c.quotes.length;
+          this.changed(c);
+        };
+        recordBest();
+        if (this.cancelled.has(id)) break;
         const coupons = await this.gateway.call("fetch_food_coupons", {
           addressId: c.request.addressId,
           restaurantId: x.restaurantId,
@@ -893,10 +902,20 @@ export class FoodService extends EventEmitter {
           const reset = await this.rebuild(c, x, expected, value => { expected = value; });
           expected = cartFingerprint(reset);
           await this.assertCart(c, expected);
-          const applied = await this.gateway.call("apply_food_coupon", {
-            addressId: c.request.addressId,
-            couponCode: code,
-          });
+          let applied;
+          try {
+            applied = await this.gateway.call("apply_food_coupon", {
+              addressId: c.request.addressId,
+              couponCode: code,
+            });
+          } catch (error) {
+            if (!(error instanceof SwiggyResponseError) || error.reason !== "REJECTED") throw error;
+            // A confirmed rejection can be skipped only if the verified cart
+            // is unchanged. Uncertain writes/transport errors still stop.
+            await this.assertCart(c, expected);
+            c.comparison.issues.push(`Coupon ${code} was rejected; its savings were not counted.`);
+            continue;
+          }
           expected = cartFingerprint(applied);
           const confirmed = await this.gateway.call("get_food_cart", {
             addressId: c.request.addressId,
@@ -907,11 +926,9 @@ export class FoodService extends EventEmitter {
           const q = this.quote(c, x, confirmed);
           if (q.coupon === code && q.total < baselineQuote.total)
             trials.push(q);
+          recordBest();
         }
-        const best = trials.sort((a, b) => a.total - b.total)[0];
-        c.quotes.push(best);
-        c.comparison.checked = c.quotes.length;
-        this.changed(c);
+        recordBest();
       }
       c.quotes.sort((a, b) => a.total - b.total);
       a.status = this.cancelled.has(id) ? "cancelled" : "done";
@@ -920,7 +937,7 @@ export class FoodService extends EventEmitter {
         id: randomUUID(),
         role: "assistant",
         text: c.quotes.length
-          ? `Compared ${c.quotes.length} selected options. ${c.quotes.filter((q) => q.withinBudget).length} fit your delivered-total budget. These are snapshots, not a guaranteed price at checkout.`
+          ? `Compared ${c.quotes.length} selected options. ${c.quotes.filter((q) => q.withinBudget).length} fit your delivered-total budget. These are snapshots, not a guaranteed price at checkout.${c.comparison.issues.length ? " " + c.comparison.issues.join(" ") : ""}`
           : "Comparison stopped.",
         timestamp: new Date().toISOString(),
       });
@@ -978,16 +995,23 @@ export class FoodService extends EventEmitter {
     });
     try { await this.gateway.call("update_food_cart", payload(false)); }
     catch (e) {
-      if (!(e instanceof SwiggyResponseError) || e.reason !== "INVALID_ADDON" || lines.length !== 1 || !lines[0].selection?.bootstrap?.length) throw e;
+      if (!(e instanceof SwiggyResponseError) || e.reason !== "INVALID_ADDON" || !lines.some(line => line.selection?.bootstrap?.length)) throw e;
       // Distinct, approved zero-price fixed-item alternatives, never a retry of
       // an uncertain transport failure or an invented optional addition.
-      const fixed = lines[0].selection.bootstrap;
+      // Enumerate only the fixed choices already frozen in this approval. A
+      // bounded set also supports mixed-item carts without adding new food.
+      let combinations: [number, ChoiceRef][][] = [[]];
+      for (const [index, line] of lines.entries()) {
+        const fixed = line.selection?.bootstrap;
+        if (fixed?.length) combinations = combinations.flatMap(previous => fixed.map(ref => [...previous, [index, ref] as [number, ChoiceRef]])).slice(0, 6);
+      }
       let succeeded = false;
-      for (const ref of fixed) {
+      for (const combination of combinations) {
         const current = await readCart();
         if ((cartData(current)?.items ?? []).length) throw new Error("Cart changed during fixed-choice validation. Inspect it in Swiggy.");
         changed(cartFingerprint(current));
-        seeds.set(0, [ref]);
+        seeds.clear();
+        for (const [index, ref] of combination) seeds.set(index, [ref]);
         try { await this.gateway.call("update_food_cart", payload(true)); succeeded = true; break; }
         catch (error) { if (!(error instanceof SwiggyResponseError) || error.reason !== "INVALID_ADDON") throw error; }
       }

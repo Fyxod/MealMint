@@ -347,6 +347,126 @@ describe('TelegramBot', () => {
     expect((await runtime.gateway.call('get_food_cart', { addressId: 'mock-home' }) as any).data.items).toEqual([]);
   });
 
+  it.each(['missing', 'expired', 'already-used'])('does not announce a comparison for a %s approval', async staleKind => {
+    const runtime = createBot();
+    await pair(runtime);
+    await runtime.bot.handle(message(ownerId, '/addresses'));
+    await runtime.bot.handle(callback(ownerId, addressCallback(runtime)));
+    const c = [...runtime.service.conversations.values()][0];
+    runtime.service.updatePreferences(c.id, { budget: 300 });
+    const search = await runtime.service.dispatch(c.id, 'food_search', { query: 'dosa' });
+    const approval = await runtime.service.requestComparison(c.id, [search.candidates[0].id]);
+    if (staleKind === 'expired') approval.expiresAt = Date.now() - 1;
+    if (staleKind === 'already-used') approval.status = 'done';
+    const callsBefore = runtime.calls.length;
+    const foodCalls = vi.spyOn(runtime.gateway, 'call');
+    await runtime.bot.handle(callback(ownerId, `approve:${staleKind === 'missing' ? 'invented-approval' : approval.id}`, `stale-${staleKind}`));
+    await waitFor(() => runtime.calls.slice(callsBefore).some(call => call.method === 'sendMessage' && String(call.body.text).includes('Approval expired or was already used.')));
+    const messages = runtime.calls.slice(callsBefore).filter(call => call.method === 'sendMessage').map(call => String(call.body.text));
+    expect(messages.some(text => text.startsWith('Checking delivered totals.'))).toBe(false);
+    expect(c.busy).toBe(false);
+    expect(foodCalls).not.toHaveBeenCalled();
+  });
+
+  it('does not resend unchanged shortlist cards or pending approvals after a memory turn, but shows a fresh approval', async () => {
+    const agent: AgentProvider = {
+      ...idleAgent(),
+      async turn(_id, text, _tools, dispatch) {
+        if (text === 'forget synthetic preference') {
+          const context: any = await dispatch('food_context', {});
+          await dispatch('food_forget', { directiveId: context.directives[0].id });
+          return 'Synthetic preference forgotten.';
+        }
+        return 'Synthetic shortlist ready.';
+      }
+    };
+    const runtime = createBot(agent);
+    await pair(runtime);
+    await runtime.bot.handle(message(ownerId, '/addresses'));
+    await runtime.bot.handle(callback(ownerId, addressCallback(runtime)));
+    const c = [...runtime.service.conversations.values()][0];
+    runtime.service.updatePreferences(c.id, { budget: 300 });
+    const search = await runtime.service.dispatch(c.id, 'food_search', { query: 'dosa' });
+    const candidateId = search.candidates[0].id;
+    await runtime.service.dispatch(c.id, 'food_present', { candidateIds: [candidateId] });
+    await runtime.service.dispatch(c.id, 'food_remember', { text: 'Synthetic QA preference: prefer mild food.', source: 'user' });
+    await runtime.bot.handle(callback(ownerId, `compare:${candidateId}`, 'initial-approval'));
+    const firstApproval = c.approval!.id;
+    const options = () => runtime.calls.filter(call => call.method === 'sendMessage' && call.body.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data === `compare:${candidateId}`);
+    const approvals = () => runtime.calls.filter(call => call.method === 'sendMessage' && String(call.body.text).startsWith('Check these exact options'));
+    expect(options()).toHaveLength(1);
+    expect(approvals()).toHaveLength(1);
+    await runtime.bot.handle(message(ownerId, 'forget synthetic preference'));
+    await waitFor(() => runtime.calls.some(call => call.method === 'sendMessage' && call.body.text === 'Synthetic preference forgotten.'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect((await runtime.service.dispatch(c.id, 'food_context', {})).directives).toEqual([]);
+    expect(options()).toHaveLength(1);
+    expect(approvals()).toHaveLength(1);
+    await runtime.bot.handle(callback(ownerId, `compare:${candidateId}`, 'fresh-approval'));
+    expect(c.approval!.id).not.toBe(firstApproval);
+    expect(options()).toHaveLength(1);
+    expect(approvals()).toHaveLength(2);
+    expect(approvals().at(-1)!.body.reply_markup.inline_keyboard[0][0].callback_data).toBe(`approve:${c.approval!.id}`);
+  });
+
+  it('keeps old verified totals quiet during unrelated chat and sends changed totals after a new comparison', async () => {
+    const runtime = createBot();
+    await pair(runtime);
+    await runtime.bot.handle(message(ownerId, '/addresses'));
+    await runtime.bot.handle(callback(ownerId, addressCallback(runtime)));
+    const c = [...runtime.service.conversations.values()][0];
+    runtime.service.updatePreferences(c.id, { budget: 300 });
+    const search = await runtime.service.dispatch(c.id, 'food_search', { query: 'dosa' });
+    const candidateId = search.candidates[0].id;
+    const approval = await runtime.service.requestComparison(c.id, [candidateId]);
+    const quoteMessages = () => runtime.calls.filter(call => call.method === 'sendMessage' && String(call.body.text).includes('Lowest among successfully checked options.'));
+    await runtime.bot.handle(callback(ownerId, `approve:${approval.id}`, 'first-quote'));
+    await waitFor(() => quoteMessages().length === 1);
+    const initialTotal = c.quotes[0].total;
+    await runtime.bot.handle(message(ownerId, 'Synthetic unrelated thank-you'));
+    await waitFor(() => runtime.calls.some(call => call.method === 'sendMessage' && call.body.text === 'synthetic reply'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(quoteMessages()).toHaveLength(1);
+    const original = runtime.gateway.call.bind(runtime.gateway);
+    vi.spyOn(runtime.gateway, 'call').mockImplementation(async (name, args): Promise<any> => {
+      const raw: any = await original(name, args);
+      if (raw?.data?.items?.length && raw.data.pricing) {
+        const changed = structuredClone(raw);
+        changed.data.pricing.to_pay += 7;
+        return changed;
+      }
+      return raw;
+    });
+    const refreshed = await runtime.service.requestComparison(c.id, [candidateId]);
+    await runtime.bot.handle(callback(ownerId, `approve:${refreshed.id}`, 'changed-quote'));
+    await waitFor(() => quoteMessages().length === 2);
+    expect(c.quotes[0].total).toBeCloseTo(initialTotal + 7, 2);
+    expect(quoteMessages()[1].body.text).toContain(`₹${(initialTotal + 7).toFixed(2)} delivered`);
+  });
+
+  it('shows an identical shortlist again after the owner starts a new conversation', async () => {
+    const runtime = createBot();
+    await pair(runtime);
+    async function prepareAndRender() {
+      await runtime.bot.handle(message(ownerId, '/addresses'));
+      await runtime.bot.handle(callback(ownerId, addressCallback(runtime)));
+      const c = [...runtime.service.conversations.values()][0];
+      runtime.service.updatePreferences(c.id, { budget: 300 });
+      const search = await runtime.service.dispatch(c.id, 'food_search', { query: 'dosa' });
+      await runtime.service.dispatch(c.id, 'food_present', { candidateIds: [search.candidates[0].id] });
+      await runtime.bot.handle(callback(ownerId, `compare:${search.candidates[0].id}`, 'render-identical-shortlist'));
+      return c;
+    }
+    const first = await prepareAndRender();
+    const candidateId = first.candidates[0].id;
+    await runtime.bot.handle(message(ownerId, '/new'));
+    const second = await prepareAndRender();
+    expect(second.id).not.toBe(first.id);
+    expect(second.candidates[0].id).toBe(candidateId);
+    const shortlistMessages = runtime.calls.filter(call => call.method === 'sendMessage' && call.body.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data === `compare:${candidateId}`);
+    expect(shortlistMessages).toHaveLength(2);
+  });
+
   it('saves a Telegram preference before address selection and exposes it to a web conversation', async () => {
     let telegramContext: any;
     const agent: AgentProvider = {

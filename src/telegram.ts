@@ -10,6 +10,8 @@ export class TelegramBot {
   private code: { value: string; expiresAt: number } | null = null;
   private conversations = new Map<number, string>();
   private renderedAssistant = new Map<number, string>();
+  private renderedOptions = new Map<number, string>();
+  private renderedApproval = new Map<number, string>();
   private abort: AbortController | null = null;
   private username: string | null = null;
   private addressMenu: { nonce: string; choices: Address[]; expiresAt: number } | null = null;
@@ -237,17 +239,15 @@ export class TelegramBot {
       } else if (data.startsWith("approve:") || data.startsWith("discardapprove:")) {
         const discardExisting = data.startsWith("discardapprove:");
         const approvalId = data.slice(discardExisting ? 15 : 8);
-        await this.send(
-          chat,
-          "Checking delivered totals. Please leave your Swiggy cart unchanged during the comparison.",
-        );
-        void this.service
-          .approve(c.id, approvalId, discardExisting)
-          .then(() => this.render(chat, c))
-          .catch((e) => this.send(chat, redact(e.message)));
+        const wasBusy = c.busy;
+        const operation = this.service.approve(c.id, approvalId, discardExisting)
+          .then(result => ({ result, error: null }), error => ({ result: null, error }));
+        if (!wasBusy && c.busy && c.approval?.id === approvalId && c.approval.status === "running")
+          await this.send(chat, "Checking delivered totals. Please leave your Swiggy cart unchanged during the comparison.");
+        void operation.then(({ error }) => error ? this.send(chat, redact(error.message)) : this.render(chat, c));
       } else if (data === "cancel") {
         await this.service.cancel(c.id);
-        await this.send(chat, "Stopped.");
+        await this.send(chat, c.busy ? "Stopping the current operation. Please wait for cleanup to finish." : "Stopped. Ready for your next message.");
       }
       } catch (e) { await this.send(chat, redact((e as Error).message)); }
       return;
@@ -288,6 +288,8 @@ export class TelegramBot {
       this.service.remove(c.id);
       this.conversations.delete(chat);
       this.renderedAssistant.delete(chat);
+      this.renderedOptions.delete(chat);
+      this.renderedApproval.delete(chat);
       this.addressMenu = null;
       this.customMenu = null;
       await this.send(chat, "New conversation. Use /addresses first.");
@@ -295,7 +297,7 @@ export class TelegramBot {
     }
     if (text === "/cancel") {
       await this.service.cancel(c.id);
-      await this.send(chat, "Stopping the current operation.");
+      await this.send(chat, c.busy ? "Stopping the current operation. Please wait for cleanup to finish." : "Stopped. Ready for your next message.");
       return;
     }
     if (!text.trim()) {
@@ -336,7 +338,9 @@ export class TelegramBot {
       this.renderedAssistant.set(chat, last.id);
     }
     if (c.error) await this.send(chat, c.error);
-    if (c.quotes.length)
+    const signature = JSON.stringify([c.candidates, c.quotes, c.comparison]);
+    const changedOptions = this.renderedOptions.get(chat) !== signature;
+    if (changedOptions && c.quotes.length)
       await this.send(
         chat,
         c.quotes
@@ -347,7 +351,7 @@ export class TelegramBot {
           .join("\n\n") +
           `\n\n${c.comparison && c.comparison.checked < c.comparison.requested ? `Partial comparison: ${c.comparison.checked}/${c.comparison.requested} options checked. ` : ""}Lowest among successfully checked options. Refresh before checkout.`,
       );
-    else if (c.candidates.length)
+    else if (changedOptions && c.candidates.length)
       await this.send(
         chat,
         c.candidates
@@ -366,7 +370,8 @@ export class TelegramBot {
             },
           ]),
       );
-    if (c.approval?.status === "pending") {
+    this.renderedOptions.set(chat, signature);
+    if (c.approval?.status === "pending" && this.renderedApproval.get(chat) !== c.approval.id) {
         await this.send(
           chat,
           (c.approval.discardExisting ? "Your Swiggy cart already has items. Approving will DISCARD those items.\n\n" : "") + "Check these exact options by temporarily changing your Swiggy cart?\n\n" +
@@ -387,6 +392,7 @@ export class TelegramBot {
             ],
           ],
         );
+        this.renderedApproval.set(chat, c.approval.id);
     }
   }
 }

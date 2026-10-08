@@ -382,17 +382,7 @@ describe('FoodService synthetic fixed-choice retries', () => {
     expect(gateway.items).toEqual([]);
   });
 
-  it('does not enumerate fixed alternatives for a multi-line cart', async () => {
-    const { gateway, service, c, configured } = await fixedSetup();
-    const other = await configure(service, c.id, configured.id, 'large', false);
-    const { candidate: bundle } = await service.dispatch(c.id, 'food_bundle', { items: [{ candidateId: configured.id, quantity: 1 }, { candidateId: other.id, quantity: 1 }] });
-    const approval = await service.requestComparison(c.id, [bundle.id]);
-    const result = await service.approve(c.id, approval.id);
-    expect(result.error).toMatch(/rejected these add-on choices/);
-    expect(result.quotes).toEqual([]);
-    expect(gateway.calls.filter(x => x.name === 'update_food_cart')).toHaveLength(1);
-    expect(gateway.items).toEqual([]);
-  });
+
 });
 
 
@@ -548,9 +538,211 @@ describe('FoodService incomplete comparison evidence', () => {
     await service.approve(c.id, approval.id);
     await cancellation;
     expect(c.comparison).toEqual({ requested: 2, checked: 1, issues: [], cancelled: true });
+    expect(gateway.calls.some(call => call.name === 'fetch_food_coupons' || call.name === 'apply_food_coupon')).toBe(false);
     expect(c.approval?.status).toBe('cancelled');
     expect(c.error).toBeNull();
     expect(c.quotes).toHaveLength(1);
     expect(gateway.items).toEqual([]);
+  });
+});
+
+
+// Two distinct observed dishes with independent fixed-item alternatives.
+class MixedFixedGateway extends SyntheticCustomizationGateway {
+  attempts = 0;
+  rejectAll = false;
+  transportAt: number | null = null;
+  readonly seedCount = 3;
+  override catalogue() {
+    const first: any = super.catalogue()[0];
+    const items = [first, { ...structuredClone(first), menu_item_id: 'custom-second', name: 'Synthetic second burger' }];
+    return items.map((item, index) => ({ ...item, addons: [...item.addons,
+      ...Array.from({ length: this.seedCount }, (_, choice) => ({ groupId: `fixed-${index}-${choice}`, groupName: 'Fixed item', minAddons: 1, maxAddons: 1,
+        choices: [{ id: `seed-${index}-${choice}`, name: `Selected synthetic item ${index}`, price: 0, inStock: 1, isVeg: true }] })),
+    ] }));
+  }
+  override async call(name: string, args: Record<string, any>): Promise<any> {
+    if (name !== 'update_food_cart') return super.call(name, args);
+    this.attempts++;
+    const correct = args.cartItems.every((line: any) => {
+      const index = line.menuItemId === 'custom' ? 0 : 1;
+      const required = index === 0 ? 1 : 2;
+      return line.addons?.some((addon: any) => addon.group_id === `fixed-${index}-${required}` && addon.choice_id === `seed-${index}-${required}`);
+    });
+    if (this.transportAt === this.attempts || this.rejectAll || !correct) {
+      this.calls.push({ name, args: structuredClone(args) });
+      if (this.transportAt === this.attempts) throw new Error('Synthetic uncertain transport error');
+      throw new SwiggyResponseError('INVALID_ADDON');
+    }
+    await super.call(name, args);
+    for (const line of this.items) line.total = (line.menu_item_id === 'custom' ? 100 : 140) * line.quantity;
+    return this.cart();
+  }
+}
+async function mixedFixedSetup() {
+  const gateway = new MixedFixedGateway();
+  const service = new FoodService(gateway, idleAgent);
+  const c = service.create();
+  await service.selectAddress(c.id, 'synthetic-home');
+  service.updatePreferences(c.id, { budget: 2000, quantity: 2 });
+  const { candidates } = await service.dispatch(c.id, 'food_search', { query: 'burger' });
+  const first = await configure(service, c.id, candidates.find((x: Candidate) => x.itemId === 'custom').id, 'small', false);
+  const second = await configure(service, c.id, candidates.find((x: Candidate) => x.itemId === 'custom-second').id, 'large', false);
+  const { candidate: bundle } = await service.dispatch(c.id, 'food_bundle', { items: [
+    { candidateId: first.id, quantity: 2 }, { candidateId: second.id, quantity: 3 },
+  ] });
+  const approval = await service.requestComparison(c.id, [bundle.id]);
+  return { gateway, service, c, bundle, approval };
+}
+
+describe('FoodService bounded mixed-item fixed choices', () => {
+  it("finds each approved dish's matching seed combination while preserving quantities, variants and exact contents", async () => {
+    const { gateway, service, c, approval } = await mixedFixedSetup();
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toBeNull();
+    expect(result.quotes[0]).toMatchObject({ itemTotal: 1240, total: 1260, quantity: 2, bundle: true });
+    const writes = gateway.calls.filter(call => call.name === 'update_food_cart');
+    expect(writes).toHaveLength(7); // Initial attempt plus the sixth distinct permitted combination.
+    const approvedItems = approval.plans[0].lines!;
+    for (const [attempt, write] of writes.entries()) {
+      expect(write.args.cartItems).toHaveLength(2);
+      expect(write.args.cartItems.map((line: any) => ({ id: line.menuItemId, quantity: line.quantity, variants: line.variantsV2 }))).toEqual([
+        { id: 'custom', quantity: 4, variants: [{ group_id: 'size', variation_id: 'small' }] },
+        { id: 'custom-second', quantity: 6, variants: [{ group_id: 'size', variation_id: 'large' }] },
+      ]);
+      if (attempt > 0) for (const line of write.args.cartItems) {
+        const approved = approvedItems.find(item => item.itemId === line.menuItemId)!;
+        expect(line.addons).toHaveLength(1);
+        expect(approved.selection!.bootstrap).toContainEqual({ groupId: line.addons[0].group_id, choiceId: line.addons[0].choice_id });
+      }
+    }
+    expect(new Set(writes.map(write => JSON.stringify(write.args.cartItems))).size).toBe(7);
+    for (let i = 1; i < writes.length; i++)
+      expect(gateway.calls.slice(gateway.calls.indexOf(writes[i - 1]) + 1, gateway.calls.indexOf(writes[i])).some(call => call.name === 'get_food_cart')).toBe(true);
+    expect(gateway.items).toEqual([]);
+  });
+
+  it('limits nine possible fixed combinations to six distinct trials and cleans up after rejection', async () => {
+    const { gateway, service, c, approval } = await mixedFixedSetup();
+    gateway.rejectAll = true;
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toMatch(/additional choices/);
+    expect(result.error).not.toMatch(/could not be safely cleared/);
+    expect(result.quotes).toEqual([]);
+    expect(result.comparison).toMatchObject({ requested: 1, checked: 0 });
+    const writes = gateway.calls.filter(call => call.name === 'update_food_cart');
+    expect(writes).toHaveLength(7);
+    expect(new Set(writes.map(write => JSON.stringify(write.args.cartItems))).size).toBe(7);
+    expect(gateway.items).toEqual([]);
+    expect(gateway.calls.at(-1)?.name).toBe('flush_food_cart');
+  });
+
+  it.each([1, 3])('stops on uncertain transport failure at attempt %s without trying another combination', async transportAt => {
+    const { gateway, service, c, approval } = await mixedFixedSetup();
+    gateway.transportAt = transportAt;
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toContain('uncertain transport error');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.calls.filter(call => call.name === 'update_food_cart')).toHaveLength(transportAt);
+    expect(gateway.items).toEqual([]);
+  });
+});
+
+class CouponFailureGateway extends SyntheticCustomizationGateway {
+  constructor(readonly codes: string[]) { super(); }
+  override cart() {
+    const raw = super.cart();
+    const discount = this.coupon === 'GOOD20' ? 20 : this.coupon === 'BETTER30' ? 30 : 0;
+    raw.data.pricing.to_pay -= discount;
+    raw.data.offers.coupon_discount = discount;
+    return raw;
+  }
+  override async call(name: string, args: Record<string, any>): Promise<any> {
+    if (name === 'fetch_food_coupons') {
+      this.calls.push({ name, args: structuredClone(args) });
+      return { coupon_sections: [{ coupons: this.codes.map(code => ({ code, applicable: true })) }] };
+    }
+    if (name === 'apply_food_coupon') {
+      this.calls.push({ name, args: structuredClone(args) });
+      if (args.couponCode === 'EXPIRED') throw new SwiggyResponseError('REJECTED');
+      if (args.couponCode === 'UNCERTAIN') throw new Error('Synthetic uncertain coupon transport failure');
+      if (args.couponCode === 'MUTATING') {
+        this.items = [{ menu_item_id: 'external-cart-item', quantity: 1, total: 120, in_stock: true }];
+        throw new SwiggyResponseError('REJECTED');
+      }
+      this.coupon = args.couponCode;
+      return this.cart();
+    }
+    return super.call(name, args);
+  }
+}
+async function couponFailureSetup(codes: string[]) {
+  const gateway = new CouponFailureGateway(codes);
+  const service = new FoodService(gateway, idleAgent);
+  const c = service.create();
+  await service.selectAddress(c.id, 'synthetic-home');
+  service.updatePreferences(c.id, { budget: 300 });
+  const search = await service.dispatch(c.id, 'food_search', { query: 'burger' });
+  const candidate = search.candidates.find((x: Candidate) => x.itemId === 'regular');
+  const approval = await service.requestComparison(c.id, [candidate.id]);
+  const result = await service.approve(c.id, approval.id);
+  return { gateway, service, c, result, applied: gateway.calls.filter(call => call.name === 'apply_food_coupon').map(call => call.args.couponCode) };
+}
+
+describe('FoodService coupon rejection recovery', () => {
+  it('skips a typed rejected coupon only after unchanged-cart verification, then checks the next code', async () => {
+    const { gateway, result, applied } = await couponFailureSetup(['EXPIRED', 'GOOD20']);
+    expect(result.error).toBeNull();
+    expect(result.approval?.status).toBe('done');
+    expect(result.quotes[0]).toMatchObject({ itemTotal: 70, coupon: 'GOOD20', discount: 20, total: 70 });
+    expect(result.comparison).toMatchObject({ requested: 1, checked: 1, issues: ['Coupon EXPIRED was rejected; its savings were not counted.'] });
+    expect(result.messages.at(-1)?.text).toContain('Coupon EXPIRED was rejected; its savings were not counted.');
+    expect(applied).toEqual(['EXPIRED', 'GOOD20']);
+    const rejected = gateway.calls.findIndex(call => call.name === 'apply_food_coupon' && call.args.couponCode === 'EXPIRED');
+    expect(gateway.calls[rejected + 1].name).toBe('get_food_cart');
+    expect(gateway.items).toEqual([]);
+  });
+
+  it('retains the earlier confirmed best quote when a later coupon is rejected', async () => {
+    const { gateway, result, applied } = await couponFailureSetup(['GOOD20', 'EXPIRED']);
+    expect(result.error).toBeNull();
+    expect(result.quotes).toHaveLength(1);
+    expect(result.quotes[0]).toMatchObject({ coupon: 'GOOD20', discount: 20, total: 70 });
+    expect(result.comparison?.issues).toEqual(['Coupon EXPIRED was rejected; its savings were not counted.']);
+    expect(applied).toEqual(['GOOD20', 'EXPIRED']);
+    expect(gateway.items).toEqual([]);
+  });
+
+  it('aborts uncertain coupon transport without retrying or discarding its verified baseline', async () => {
+    const { gateway, result, applied } = await couponFailureSetup(['UNCERTAIN', 'BETTER30']);
+    expect(result.error).toContain('uncertain coupon transport failure');
+    expect(result.approval?.status).toBe('cancelled');
+    expect(result.quotes[0]).toMatchObject({ coupon: null, discount: 0, total: 90 });
+    expect(result.comparison).toMatchObject({ requested: 1, checked: 1 });
+    expect(applied).toEqual(['UNCERTAIN']);
+    expect(gateway.items).toEqual([]);
+  });
+
+  it('retains earlier confirmed coupon savings if a later trial fails with uncertain transport', async () => {
+    const { gateway, result, applied } = await couponFailureSetup(['GOOD20', 'UNCERTAIN', 'BETTER30']);
+    expect(result.error).toContain('uncertain coupon transport failure');
+    expect(result.quotes[0]).toMatchObject({ coupon: 'GOOD20', discount: 20, total: 70 });
+    expect(applied).toEqual(['GOOD20', 'UNCERTAIN']);
+    expect(gateway.items).toEqual([]);
+  });
+
+  it('aborts a typed rejection if the cart changed, retaining the baseline and leaving the unrecognized cart untouched', async () => {
+    const { gateway, result, applied } = await couponFailureSetup(['MUTATING', 'GOOD20']);
+    expect(result.error).toContain('Cart changed outside this comparison');
+    expect(result.error).toContain('could not be safely cleared');
+    expect(result.quotes[0]).toMatchObject({ coupon: null, total: 90 });
+    expect(result.comparison?.issues).toEqual(expect.arrayContaining([
+      expect.stringContaining('Cart changed outside this comparison'),
+      expect.stringContaining('could not be safely cleared'),
+    ]));
+    expect(applied).toEqual(['MUTATING']);
+    expect(gateway.items[0].menu_item_id).toBe('external-cart-item');
+    const appliedAt = gateway.calls.findIndex(call => call.name === 'apply_food_coupon');
+    expect(gateway.calls.slice(appliedAt + 1).every(call => call.name !== 'flush_food_cart' && call.name !== 'update_food_cart')).toBe(true);
   });
 });
