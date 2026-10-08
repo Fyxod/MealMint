@@ -1,3 +1,5 @@
+> October 8 update: Swiggy and paired Telegram are live; controlled results and current limitations are in [LIVE_VALIDATION.md](LIVE_VALIDATION.md). The dated October 3 audit below preserves the earlier synthetic milestone.
+
 # Deployment audit — 2026-10-03
 
 ## Current conclusion

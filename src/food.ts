@@ -1,6 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { FoodGateway } from "./types.js";
+import { cartData, cartFingerprint } from "./cart.js";
 
 const allowed = new Set([
   "get_addresses",
@@ -14,9 +15,13 @@ const allowed = new Set([
   "flush_food_cart",
 ]);
 export class SwiggyResponseError extends Error {
-  constructor(readonly reason: "INVALID_ADDON" | "UNAVAILABLE" | "REJECTED") {
+  declare readonly cartFingerprint?: string;
+  constructor(readonly reason: "INVALID_ADDON" | "UNAVAILABLE" | "REJECTED", fingerprint?: string) {
     super(reason === "INVALID_ADDON" ? "Swiggy rejected these add-on choices. Edit the choices and try again." :
       reason === "UNAVAILABLE" ? "This food is no longer available. Search again." : "Swiggy could not complete this request.");
+    // Retain only a private receipt hash; provider diagnostics/session IDs are
+    // never attached to the error or passed to the LLM.
+    Object.defineProperty(this, "cartFingerprint", { value: fingerprint, enumerable: false });
   }
 }
 export class LiveFoodGateway implements FoodGateway {
@@ -122,10 +127,19 @@ export class LiveFoodGateway implements FoodGateway {
       if (result.isError || data?.success === false)
         throw new Error("Swiggy could not complete this request.");
       if (!data) throw new Error("Swiggy returned no structured data.");
-      if (data.successful === false || (typeof data.statusCode === "number" && data.statusCode !== 0))
+      if (data.success === true && "data" in data) data = data.data;
+      if (!data) throw new Error("Swiggy returned no structured data.");
+      // Status 8 is an out-of-stock cart. Its item state is still readable for
+      // identity checks and cleanup, but must never become a payable quote.
+      const readableUnavailableCart = name === "get_food_cart" && data.statusCode === 8 &&
+        data.successful !== false && Array.isArray(data.data?.items) &&
+        data.data.items.some((item: any) => item.in_stock === 0 || item.in_stock === false);
+      if (!readableUnavailableCart && (data.successful === false || (typeof data.statusCode === "number" && data.statusCode !== 0)))
         throw new SwiggyResponseError(data.errorCodes?.includes("INVALID_ADDON") ? "INVALID_ADDON" :
-          data.errorCodes?.some((x: string) => /UNAVAILABLE|OUT_OF_STOCK|INVALID_ITEM/.test(x)) ? "UNAVAILABLE" : "REJECTED");
-      return data.success === true && "data" in data ? data.data : data;
+          data.statusCode === 8 || data.errorCodes?.some((x: string) => /UNAVAILABLE|OUT_OF_STOCK|INVALID_ITEM/.test(x)) ? "UNAVAILABLE" : "REJECTED",
+          name === "update_food_cart" && data.statusCode === 8 && Array.isArray(cartData(data)?.items) && cartData(data).items.length
+            ? cartFingerprint(data) : undefined);
+      return data;
     } catch (e: any) {
       if (e instanceof SwiggyResponseError) throw e;
       if (

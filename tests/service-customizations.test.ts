@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FoodService } from '../src/service.js';
 import { SwiggyResponseError } from '../src/food.js';
+import { cartFingerprint } from '../src/cart.js';
 import type { AgentProvider, Candidate, FoodGateway } from '../src/types.js';
 
 // All catalogue, address, pricing and coupon values in this gateway are synthetic.
@@ -238,7 +239,7 @@ describe('FoodService synthetic customization and coupon regressions', () => {
     const regular = candidates.find(x => x.itemId === 'regular')!;
     const approval = await service.requestComparison(c.id, [regular.id]);
     const result = await service.approve(c.id, approval.id);
-    expect(result.error).toMatch(/do not match|unavailable/);
+    expect(result.error).toContain('no longer available');
     expect(result.quotes).toEqual([]);
     expect(gateway.items).toEqual([]);
   });
@@ -744,5 +745,199 @@ describe('FoodService coupon rejection recovery', () => {
     expect(gateway.items[0].menu_item_id).toBe('external-cart-item');
     const appliedAt = gateway.calls.findIndex(call => call.name === 'apply_food_coupon');
     expect(gateway.calls.slice(appliedAt + 1).every(call => call.name !== 'flush_food_cart' && call.name !== 'update_food_cart')).toBe(true);
+  });
+});
+
+class RetainedUnavailableGateway extends SyntheticCustomizationGateway {
+  mutate: 'none' | 'wrong-item' | 'wrong-quantity' | 'extra-item' | 'extra-addon' | 'wrong-variant' | 'wrong-restaurant' | 'missing-restaurant' = 'none';
+  uncertainTransport = false;
+  retained = false;
+  override cart() {
+    const cart = super.cart();
+    if (this.retained && this.mutate === 'wrong-restaurant') cart.data.restaurant = { id: 'other-restaurant', name: 'Synthetic other kitchen' };
+    if (this.retained && this.mutate === 'missing-restaurant') cart.data.restaurant = null;
+    return { ...cart, statusCode: this.retained && this.items.length ? 8 : 0 };
+  }
+  override async call(name: string, args: Record<string, any>): Promise<any> {
+    if (name === 'flush_food_cart') this.retained = false;
+    if (name !== 'update_food_cart') return super.call(name, args);
+    await super.call(name, args);
+    this.retained = true;
+    for (const item of this.items) item.in_stock = 0;
+    if (this.mutate === 'wrong-item') this.items[0].menu_item_id = 'unapproved-item';
+    if (this.mutate === 'wrong-quantity') this.items[0].quantity++;
+    if (this.mutate === 'extra-item') this.items.push({ menu_item_id: 'extra-item', quantity: 1, total: 20, in_stock: true });
+    if (this.mutate === 'extra-addon') this.items[0].addons.push({ group_id: 'unapproved-addon-group', choice_id: 'unapproved-addon' });
+    if (this.mutate === 'wrong-variant') this.items[0].variants = [{ group_id: 'size', variation_id: 'large' }];
+    if (this.uncertainTransport) throw new Error('Synthetic uncertain retained-cart transport failure');
+    throw new SwiggyResponseError('UNAVAILABLE');
+  }
+}
+async function retainedUnavailableSetup(configured = false) {
+  const gateway = new RetainedUnavailableGateway();
+  const service = new FoodService(gateway, idleAgent);
+  const c = service.create();
+  await service.selectAddress(c.id, 'synthetic-home');
+  service.updatePreferences(c.id, { budget: 500 });
+  const search = await service.dispatch(c.id, 'food_search', { query: 'burger' });
+  const find = (itemId: string) => search.candidates.find((x: Candidate) => x.itemId === itemId);
+  const candidate = configured ? await configure(service, c.id, find('custom').id, 'small', false) :
+    (await service.dispatch(c.id, 'food_bundle', { items: [{ candidateId: find('regular').id, quantity: 2 }, { candidateId: find('discounted').id, quantity: 1 }] })).candidate;
+  const approval = await service.requestComparison(c.id, [candidate.id]);
+  return { gateway, service, c, approval };
+}
+
+describe('FoodService exact retained out-of-stock cart cleanup', () => {
+  it('clears the exact approved out-of-stock cart after the second-stage add-on write is rejected', async () => {
+    const { gateway, service, c, base } = await setup();
+    const configured = await configure(service, c.id, base.id, 'small', true);
+    const original = gateway.call.bind(gateway);
+    gateway.call = async (name, args) => {
+      const result = await original(name, args);
+      if (name === 'update_food_cart' && args.cartItems[0].addons?.length) {
+        gateway.items[0].in_stock = 0;
+        throw new SwiggyResponseError('UNAVAILABLE');
+      }
+      return result;
+    };
+    const approval = await service.requestComparison(c.id, [configured.id]);
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toContain('no longer available');
+    expect(result.error).not.toContain('could not be safely cleared');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.calls.filter(call => call.name === 'update_food_cart')).toHaveLength(2);
+    expect(gateway.items).toEqual([]);
+  });
+
+  it('clears an exact approved out-of-stock cart retained by a typed failure during fixed-choice fallback', async () => {
+    const { gateway, service, c, configured } = await fixedSetup();
+    const original = gateway.call.bind(gateway);
+    gateway.call = async (name, args) => {
+      const result = await original(name, args);
+      if (name === 'update_food_cart') {
+        gateway.items[0].in_stock = 0;
+        throw new SwiggyResponseError('UNAVAILABLE');
+      }
+      return result;
+    };
+    const approval = await service.requestComparison(c.id, [configured.id]);
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toContain('no longer available');
+    expect(result.error).not.toContain('could not be safely cleared');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.calls.filter(call => call.name === 'update_food_cart')).toHaveLength(3);
+    expect(gateway.items).toEqual([]);
+  });
+
+  it.each([false, true])('clears exact approved retained out-of-stock items without creating quotes (configured=%s)', async configured => {
+    const { gateway, service, c, approval } = await retainedUnavailableSetup(configured);
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toContain('no longer available');
+    expect(result.error).not.toContain('could not be safely cleared');
+    expect(result.quotes).toEqual([]);
+    expect(result.comparison).toMatchObject({ requested: 1, checked: 0 });
+    expect(gateway.calls.filter(call => call.name === 'update_food_cart')).toHaveLength(1);
+    expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(2);
+    expect(gateway.items).toEqual([]);
+  });
+
+  it.each(['wrong-item', 'wrong-quantity', 'extra-item', 'extra-addon', 'wrong-restaurant', 'missing-restaurant'] as const)('preserves a retained cart with %s instead of treating it as the approved submission', async mutate => {
+    const { gateway, service, c, approval } = await retainedUnavailableSetup();
+    gateway.mutate = mutate;
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toContain('could not be safely cleared');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.items.length).toBeGreaterThan(0);
+    expect(gateway.calls.filter(call => call.name === 'update_food_cart')).toHaveLength(1);
+    expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(1);
+  });
+
+  it.each(['wrong-variant', 'extra-addon'] as const)('preserves a configured retained cart containing %s', async mutate => {
+    const { gateway, service, c, approval } = await retainedUnavailableSetup(true);
+    gateway.mutate = mutate;
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toContain('could not be safely cleared');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.items).toHaveLength(1);
+    expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(1);
+  });
+
+  it('does not retry or adopt even an apparently matching cart following ambiguous transport failure', async () => {
+    const { gateway, service, c, approval } = await retainedUnavailableSetup();
+    gateway.uncertainTransport = true;
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toContain('uncertain retained-cart transport failure');
+    expect(result.error).toContain('could not be safely cleared');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.items).toHaveLength(2);
+    expect(gateway.calls.filter(call => call.name === 'update_food_cart')).toHaveLength(1);
+    expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(1);
+  });
+});
+
+
+describe('FoodService authoritative unavailable-write receipts', () => {
+  it.each([false, true])('clears a matching receipt-backed approved cart without restaurant identity (configured=%s)', async configured => {
+    const { gateway, service, c, approval } = await retainedUnavailableSetup(configured);
+    gateway.mutate = 'missing-restaurant';
+    const original = gateway.call.bind(gateway);
+    gateway.call = async (name, args) => {
+      try { return await original(name, args); }
+      catch (error) {
+        if (name === 'update_food_cart' && error instanceof SwiggyResponseError)
+          throw new SwiggyResponseError('UNAVAILABLE', cartFingerprint(gateway.cart()));
+        throw error;
+      }
+    };
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toContain('no longer available');
+    expect(result.error).not.toContain('could not be safely cleared');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.items).toEqual([]);
+    expect(gateway.calls.filter(call => call.name === 'update_food_cart')).toHaveLength(1);
+    expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(2);
+  });
+
+  it.each(['total', 'offers'])('preserves a receipt-backed cart when fresh %s no longer matches the write response', async changed => {
+    const { gateway, service, c, approval } = await retainedUnavailableSetup();
+    gateway.mutate = 'missing-restaurant';
+    const original = gateway.call.bind(gateway);
+    gateway.call = async (name, args) => {
+      try { return await original(name, args); }
+      catch (error) {
+        if (name !== 'update_food_cart' || !(error instanceof SwiggyResponseError)) throw error;
+        const receipt = cartFingerprint(gateway.cart());
+        if (changed === 'total') gateway.items[0].total += 1;
+        else gateway.coupon = 'EXTERNAL';
+        throw new SwiggyResponseError('UNAVAILABLE', receipt);
+      }
+    };
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toContain('could not be safely cleared');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.items).toHaveLength(2);
+    expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(1);
+  });
+
+  it.each(['extra-addon', 'extra-item', 'wrong-quantity', 'wrong-restaurant'] as const)('does not let an authentic receipt authorize %s outside the frozen plan', async mismatch => {
+    const { gateway, service, c, approval } = await retainedUnavailableSetup();
+    gateway.mutate = 'missing-restaurant';
+    const original = gateway.call.bind(gateway);
+    gateway.call = async (name, args) => {
+      try { return await original(name, args); }
+      catch (error) {
+        if (name !== 'update_food_cart' || !(error instanceof SwiggyResponseError)) throw error;
+        if (mismatch === 'extra-addon') gateway.items[0].addons.push({ group_id: 'unapproved', choice_id: 'unapproved' });
+        if (mismatch === 'extra-item') gateway.items.push({ menu_item_id: 'unapproved', quantity: 1, total: 10, in_stock: 0 });
+        if (mismatch === 'wrong-quantity') gateway.items[0].quantity++;
+        if (mismatch === 'wrong-restaurant') gateway.mutate = 'wrong-restaurant';
+        throw new SwiggyResponseError('UNAVAILABLE', cartFingerprint(gateway.cart()));
+      }
+    };
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toContain('could not be safely cleared');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.items.length).toBeGreaterThan(0);
+    expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(1);
   });
 });

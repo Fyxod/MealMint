@@ -48,3 +48,7 @@ Release `4a9d4ff` clarified contextual coupon applicability. Typecheck, 73 tests
 ## MealMint rename verification
 
 Current source runtime 5078ba4 passes typecheck, 73 tests and production build. UI/title, npm package, protocol client names, OAuth registration name, Telegram greeting, cookie, deployment paths and source links were renamed. Fresh actual hosted Luna max on the new HTTPS domain proposed the same bundle, saved/deleted a fictional directive and returned ₹217.30 after approval. HTTPS/API/callback state guard and old-domain redirect passed; resume stayed 200. Video was recaptured/rendered with the new branding and fully decoded; public bytes matched its new hash, with successful anonymous range serving. See `VIDEO_DELIVERY.md`.
+
+## October 8 live follow-up
+
+178 synthetic tests/12 files, typecheck and production build passed for d53d9fe. Controlled real web/Telegram agent runs use gpt-6-luna/max and are documented separately in [LIVE_VALIDATION.md](LIVE_VALIDATION.md); synthetic success is not a claim of every live scenario or real coupon savings.

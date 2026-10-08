@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
+import { cartData, cartFingerprint } from "./cart.js";
 import { z } from "zod";
 import type {
   Address,
@@ -172,28 +173,7 @@ export const foodTools: ToolSpec[] = [
     ),
   },
 ];
-export function cartData(raw: any): any {
-  return raw?.data?.pricing
-    ? raw.data
-    : raw?.pricing
-      ? raw
-      : raw?.data?.data?.pricing
-        ? raw.data.data
-        : (raw?.data ?? raw);
-}
-export function cartFingerprint(raw: any) {
-  const c = cartData(raw);
-  return createHash("sha256")
-    .update(
-      JSON.stringify({
-        restaurant: c?.restaurant?.id ?? null,
-        items: c?.items ?? [],
-        offers: c?.offers ?? null,
-        total: c?.pricing?.to_pay ?? null,
-      }),
-    )
-    .digest("hex");
-}
+export { cartData, cartFingerprint } from "./cart.js";
 export function qualifies(c: Candidate, r: MealRequest) {
   const unknownSelectionPrice = c.price === null && (!!c.selection || !!c.lines?.some(line => line.selection));
   return (
@@ -982,6 +962,15 @@ export class FoodService extends EventEmitter {
     changed(cartFingerprint(await readCart()));
     const lines: CartLine[] = x.lines ?? [{ itemId: x.itemId, name: x.name, quantity: 1, ...(x.selection ? { selection: x.selection } : {}) }];
     const seeds = new Map<number, ChoiceRef[]>();
+    const rejected = async (error: unknown) => {
+      if (error instanceof SwiggyResponseError && error.reason === "UNAVAILABLE") {
+        const current = await readCart();
+        // Swiggy may retain the exact submitted items while flagging them out
+        // of stock. Only this identifiable approved cart can be cleared.
+        const confirmedReceipt = error.cartFingerprint === cartFingerprint(current);
+        if (this.approvedCartMatches(c, x, current, true, confirmedReceipt)) changed(cartFingerprint(current));
+      }
+    };
     const payload = (addons: boolean) => ({
       addressId: c.request.addressId,
       restaurantId: x.restaurantId,
@@ -995,6 +984,7 @@ export class FoodService extends EventEmitter {
     });
     try { await this.gateway.call("update_food_cart", payload(false)); }
     catch (e) {
+      await rejected(e);
       if (!(e instanceof SwiggyResponseError) || e.reason !== "INVALID_ADDON" || !lines.some(line => line.selection?.bootstrap?.length)) throw e;
       // Distinct, approved zero-price fixed-item alternatives, never a retry of
       // an uncertain transport failure or an invented optional addition.
@@ -1013,7 +1003,7 @@ export class FoodService extends EventEmitter {
         seeds.clear();
         for (const [index, ref] of combination) seeds.set(index, [ref]);
         try { await this.gateway.call("update_food_cart", payload(true)); succeeded = true; break; }
-        catch (error) { if (!(error instanceof SwiggyResponseError) || error.reason !== "INVALID_ADDON") throw error; }
+        catch (error) { await rejected(error); if (!(error instanceof SwiggyResponseError) || error.reason !== "INVALID_ADDON") throw error; }
       }
       if (!succeeded) throw new Error("This variant needs additional choices. Select its meal side/beverage or use another dish.");
     }
@@ -1026,11 +1016,29 @@ export class FoodService extends EventEmitter {
     }
     if (lines.some(line => line.selection?.addons.length)) {
       await this.assertCart(c, cartFingerprint(cart));
-      await this.gateway.call("update_food_cart", payload(true));
+      try { await this.gateway.call("update_food_cart", payload(true)); }
+      catch (error) { await rejected(error); throw error; }
       cart = await readCart();
       changed(cartFingerprint(cart));
     }
     return cart;
+  }
+  private approvedCartMatches(c: Conversation, x: Candidate, raw: any, allowUnavailable = false, confirmedReceipt = false) {
+    const data = cartData(raw);
+    const restaurantId = data?.restaurant?.id ?? data?.restaurant?.restaurant_id ?? data?.restaurant?.restaurantId;
+    if ((allowUnavailable && restaurantId == null && !confirmedReceipt) || (restaurantId != null && String(restaurantId) !== x.restaurantId)) return false;
+    const lines: CartLine[] = x.lines ?? [{ itemId: x.itemId, name: x.name, quantity: 1, ...(x.selection ? { selection: x.selection } : {}) }];
+    const remaining = [...(data?.items ?? [])];
+    if (remaining.length !== lines.length) return false;
+    for (const line of lines) {
+      const index = remaining.findIndex((item: any) => String(item.menu_item_id) === line.itemId &&
+        item.quantity === line.quantity * c.request.quantity &&
+        (allowUnavailable || (item.in_stock !== false && item.in_stock !== 0)) &&
+        (line.selection ? selectionsMatch(line.selection, item) : item.addons == null || (Array.isArray(item.addons) && !item.addons.length)));
+      if (index < 0) return false;
+      remaining.splice(index, 1);
+    }
+    return true;
   }
   private quote(c: Conversation, x: Candidate, raw: any): Quote {
     const data = cartData(raw),
@@ -1044,19 +1052,9 @@ export class FoodService extends EventEmitter {
       throw new Error("No verified payable total was returned.");
     if (data.restaurant?.id && String(data.restaurant.id) !== x.restaurantId)
       throw new Error("Cart restaurant does not match the candidate.");
-    const items = data.items ?? [];
-    const expectedLines: CartLine[] = x.lines ?? [
-      { itemId: x.itemId, name: x.name, quantity: 1, ...(x.selection ? { selection: x.selection } : {}) },
-    ];
-    const remaining = [...items];
-    if (items.length !== expectedLines.length) throw new Error("Cart contents do not match the approved item.");
-    for (const line of expectedLines) {
-      const index = remaining.findIndex((item: any) => String(item.menu_item_id) === line.itemId &&
-        item.quantity === line.quantity * c.request.quantity && item.in_stock !== false && item.in_stock !== 0 &&
-        (!line.selection || selectionsMatch(line.selection, item)));
-      if (index < 0) throw new Error("Cart contents or customizations do not match the approved item.");
-      remaining.splice(index, 1);
-    }
+    if ((data.items ?? []).some((item: any) => item.in_stock === 0 || item.in_stock === false))
+      throw new SwiggyResponseError("UNAVAILABLE");
+    if (!this.approvedCartMatches(c, x, raw)) throw new Error("Cart contents or customizations do not match the approved item.");
     const discount = Number(data.offers?.coupon_discount ?? 0);
     return {
       candidateId: x.id,

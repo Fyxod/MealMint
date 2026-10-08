@@ -17,6 +17,7 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
 }));
 
 import { LiveFoodGateway, SwiggyResponseError } from '../src/food.js';
+import { cartFingerprint } from '../src/cart.js';
 
 const officialTools = [
   'get_addresses', 'search_restaurants', 'search_menu', 'get_restaurant_menu',
@@ -181,6 +182,90 @@ describe('LiveFoodGateway', () => {
     expect(error).not.toBeInstanceOf(SwiggyResponseError);
     expect(error.message).not.toMatch(/synthetic-private|INVALID_ADDON/);
     expect(sdk.client.callTool).toHaveBeenCalledOnce();
+  });
+
+  it.each([0, false])('exposes a readable status-8 cart with explicit out-of-stock flag %s for identity checks only', async inStock => {
+    const cart = { statusCode: 8, statusMessage: 'Synthetic stock changed', data: { items: [{ menu_item_id: 'synthetic-item', quantity: 2, in_stock: inStock }], pricing: { item_total: 300, to_pay: 304 } } };
+    sdk.client.callTool.mockResolvedValue({ structuredContent: cart, content: [], isError: false });
+    await expect(gateway().call('get_food_cart', {})).resolves.toEqual(cart);
+    expect(sdk.client.callTool).toHaveBeenCalledOnce();
+  });
+
+  it.each(['update_food_cart', 'apply_food_coupon', 'flush_food_cart'])('never treats status 8 from %s as a successful write', async name => {
+    sdk.client.callTool.mockResolvedValue({ structuredContent: { statusCode: 8, data: { items: [{ menu_item_id: 'synthetic-item', quantity: 1, in_stock: 0 }] } }, content: [], isError: false });
+    const error = await gateway().call(name, {}).catch(error => error);
+    expect(error).toBeInstanceOf(SwiggyResponseError);
+    expect(error.reason).toBe('UNAVAILABLE');
+    expect(sdk.client.callTool).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { statusCode: 8 },
+    { statusCode: 8, data: { items: null } },
+    { statusCode: 8, data: { items: [] } },
+    { statusCode: 8, data: { items: [{ in_stock: true }] } },
+    { statusCode: 8, successful: false, data: { items: [{ in_stock: 0 }] } },
+  ])('rejects malformed or explicitly unsuccessful status-8 cart %#', async cart => {
+    sdk.client.callTool.mockResolvedValue({ structuredContent: cart, content: [], isError: false });
+    const error = await gateway().call('get_food_cart', {}).catch(error => error);
+    expect(error).toBeInstanceOf(SwiggyResponseError);
+    expect(error.reason).toBe('UNAVAILABLE');
+  });
+
+  it('unwraps an envelope before recognizing a readable out-of-stock cart', async () => {
+    const cart = { statusCode: 8, data: { items: [{ menu_item_id: 'synthetic-item', quantity: 1, in_stock: false }], pricing: { to_pay: 304, item_total: 300 } } };
+    sdk.client.callTool.mockResolvedValue({ structuredContent: { success: true, data: cart }, content: [], isError: false });
+    await expect(gateway().call('get_food_cart', {})).resolves.toEqual(cart);
+  });
+
+  it.each([
+    [{ statusCode: 1, errorCodes: ['INVALID_ADDON'] }, 'INVALID_ADDON'],
+    [{ statusCode: 8, data: { items: [{ in_stock: 0 }] } }, 'UNAVAILABLE'],
+    [{ successful: false }, 'REJECTED'],
+  ] as const)('does not mistake a success envelope containing provider failure %# for a successful write', async (inner, reason) => {
+    sdk.client.callTool.mockResolvedValue({ structuredContent: { success: true, data: { ...inner, sid: 'synthetic-private-sid', tid: 'synthetic-private-tid' } }, content: [], isError: false });
+    const error = await gateway().call('update_food_cart', {}).catch(error => error);
+    expect(error).toBeInstanceOf(SwiggyResponseError);
+    expect(error.reason).toBe(reason);
+    expect([error.message, JSON.stringify(error)].join(' ')).not.toContain('synthetic-private');
+    expect(sdk.client.callTool).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, true])('attaches only a private non-enumerable cart receipt to status-8 write errors (wrapped=%s)', async wrapped => {
+    const cart = { statusCode: 8, sid: 'synthetic-private-sid', tid: 'synthetic-private-tid', statusMessage: 'synthetic-private-diagnostic', data: {
+      restaurant: { deliverySubtitle: 'synthetic-private-location' },
+      items: [{ menu_item_id: 'synthetic-item', name: 'synthetic-private-food', quantity: 2, in_stock: 0, addons: [] }],
+      pricing: { item_total: 300, to_pay: 304 }, offers: { coupon_applied: null },
+    } };
+    sdk.client.callTool.mockResolvedValue({ structuredContent: wrapped ? { success: true, data: cart } : cart, content: [], isError: false });
+    const error = await gateway().call('update_food_cart', {}).catch(error => error);
+    expect(error).toBeInstanceOf(SwiggyResponseError);
+    expect(error.reason).toBe('UNAVAILABLE');
+    expect(error.cartFingerprint).toBe(cartFingerprint(cart));
+    expect(error.cartFingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(Object.getOwnPropertyDescriptor(error, 'cartFingerprint')?.enumerable).toBe(false);
+    expect(Object.keys(error)).not.toContain('cartFingerprint');
+    expect(JSON.stringify(error)).not.toContain(error.cartFingerprint);
+    expect(error).not.toHaveProperty('data');
+    expect(error).not.toHaveProperty('sid');
+    expect(error).not.toHaveProperty('tid');
+    expect(error).not.toHaveProperty('cause');
+    const attachedValues = Object.getOwnPropertyNames(error).map(key => (error as any)[key]);
+    expect(JSON.stringify(attachedValues)).not.toContain('synthetic-private');
+  });
+
+  it.each([
+    ['apply_food_coupon', { statusCode: 8, data: { items: [{ in_stock: 0 }] } }],
+    ['flush_food_cart', { statusCode: 8, data: { items: [{ in_stock: 0 }] } }],
+    ['get_food_cart', { statusCode: 8, successful: false, data: { items: [{ in_stock: 0 }] } }],
+    ['update_food_cart', { statusCode: 1, errorCodes: ['OUT_OF_STOCK'], data: { items: [{ in_stock: 0 }] } }],
+    ['update_food_cart', { statusCode: 8, data: { items: [] } }],
+    ['update_food_cart', { statusCode: 8, data: { items: null } }],
+  ] as const)('never manufactures a receipt for unsupported error source %#', async (name, cart) => {
+    sdk.client.callTool.mockResolvedValue({ structuredContent: cart, content: [], isError: false });
+    const error = await gateway().call(name, {}).catch(error => error);
+    expect(error).toBeInstanceOf(SwiggyResponseError);
+    expect(error.cartFingerprint).toBeUndefined();
   });
 
   it('waits for the local write window before making another remote call', async () => {
