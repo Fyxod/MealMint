@@ -17,7 +17,7 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
 }));
 
 import { LiveFoodGateway, SwiggyResponseError } from '../src/food.js';
-import { cartFingerprint } from '../src/cart.js';
+import { cartReceiptFingerprint } from '../src/cart.js';
 
 const officialTools = [
   'get_addresses', 'search_restaurants', 'search_menu', 'get_restaurant_menu',
@@ -238,10 +238,10 @@ describe('LiveFoodGateway', () => {
       pricing: { item_total: 300, to_pay: 304 }, offers: { coupon_applied: null },
     } };
     sdk.client.callTool.mockResolvedValue({ structuredContent: wrapped ? { success: true, data: cart } : cart, content: [], isError: false });
-    const error = await gateway().call('update_food_cart', {}).catch(error => error);
+    const error = await gateway().call('update_food_cart', { restaurantId: 'synthetic-r' }).catch(error => error);
     expect(error).toBeInstanceOf(SwiggyResponseError);
     expect(error.reason).toBe('UNAVAILABLE');
-    expect(error.cartFingerprint).toBe(cartFingerprint(cart));
+    expect(error.cartFingerprint).toBe(cartReceiptFingerprint(cart, 'synthetic-r'));
     expect(error.cartFingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(Object.getOwnPropertyDescriptor(error, 'cartFingerprint')?.enumerable).toBe(false);
     expect(Object.keys(error)).not.toContain('cartFingerprint');

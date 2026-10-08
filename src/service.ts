@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { cartData, cartFingerprint } from "./cart.js";
+import { cartData, cartFingerprint, cartReceiptFingerprint } from "./cart.js";
 import { z } from "zod";
 import type {
   Address,
@@ -967,7 +967,7 @@ export class FoodService extends EventEmitter {
         const current = await readCart();
         // Swiggy may retain the exact submitted items while flagging them out
         // of stock. Only this identifiable approved cart can be cleared.
-        const confirmedReceipt = error.cartFingerprint === cartFingerprint(current);
+        const confirmedReceipt = error.cartFingerprint === cartReceiptFingerprint(current, x.restaurantId);
         if (this.approvedCartMatches(c, x, current, true, confirmedReceipt)) changed(cartFingerprint(current));
       }
     };

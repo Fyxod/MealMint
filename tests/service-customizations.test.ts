@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FoodService } from '../src/service.js';
 import { SwiggyResponseError } from '../src/food.js';
-import { cartFingerprint } from '../src/cart.js';
+import { cartFingerprint, cartReceiptFingerprint } from '../src/cart.js';
 import type { AgentProvider, Candidate, FoodGateway } from '../src/types.js';
 
 // All catalogue, address, pricing and coupon values in this gateway are synthetic.
@@ -877,6 +877,52 @@ describe('FoodService exact retained out-of-stock cart cleanup', () => {
 
 
 describe('FoodService authoritative unavailable-write receipts', () => {
+  it('accepts a fresh unselected add-on catalog while preserving the full concurrency fingerprint', async () => {
+    const { gateway, service, c, approval } = await retainedUnavailableSetup();
+    gateway.mutate = 'missing-restaurant';
+    const original = gateway.call.bind(gateway);
+    let writeFingerprint: string | undefined;
+    gateway.call = async (name, args) => {
+      try { return await original(name, args); }
+      catch (error) {
+        if (name !== 'update_food_cart' || !(error instanceof SwiggyResponseError)) throw error;
+        const writeCart = gateway.cart();
+        const receipt = cartReceiptFingerprint(writeCart, 'synthetic-r');
+        writeFingerprint = cartFingerprint(writeCart);
+        gateway.items[0].valid_addons = [{ groupId: 'new-catalog-group', groupName: 'Refreshed choices', maxAddons: 2,
+          choices: [{ id: 'new-catalog-choice', name: 'Synthetic new possible topping', price: 45 }] }];
+        expect(cartFingerprint(gateway.cart())).not.toBe(writeFingerprint);
+        expect(cartReceiptFingerprint(gateway.cart(), 'synthetic-r')).toBe(receipt);
+        throw new SwiggyResponseError('UNAVAILABLE', receipt);
+      }
+    };
+    const result = await service.approve(c.id, approval.id);
+    expect(writeFingerprint).toBeDefined();
+    expect(result.error).not.toContain('could not be safely cleared');
+    expect(result.error).toContain('no longer available');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.items).toEqual([]);
+  });
+
+  it.each(['', 'other-restaurant'])('does not adopt a missing-identity cart with an unscoped or wrong-scope receipt (%s)', async scope => {
+    const { gateway, service, c, approval } = await retainedUnavailableSetup();
+    gateway.mutate = 'missing-restaurant';
+    const original = gateway.call.bind(gateway);
+    gateway.call = async (name, args) => {
+      try { return await original(name, args); }
+      catch (error) {
+        if (name === 'update_food_cart' && error instanceof SwiggyResponseError)
+          throw new SwiggyResponseError('UNAVAILABLE', cartReceiptFingerprint(gateway.cart(), scope));
+        throw error;
+      }
+    };
+    const result = await service.approve(c.id, approval.id);
+    expect(result.error).toContain('could not be safely cleared');
+    expect(result.quotes).toEqual([]);
+    expect(gateway.items).toHaveLength(2);
+    expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(1);
+  });
+
   it.each([false, true])('clears a matching receipt-backed approved cart without restaurant identity (configured=%s)', async configured => {
     const { gateway, service, c, approval } = await retainedUnavailableSetup(configured);
     gateway.mutate = 'missing-restaurant';
@@ -885,7 +931,7 @@ describe('FoodService authoritative unavailable-write receipts', () => {
       try { return await original(name, args); }
       catch (error) {
         if (name === 'update_food_cart' && error instanceof SwiggyResponseError)
-          throw new SwiggyResponseError('UNAVAILABLE', cartFingerprint(gateway.cart()));
+          throw new SwiggyResponseError('UNAVAILABLE', cartReceiptFingerprint(gateway.cart(), 'synthetic-r'));
         throw error;
       }
     };
@@ -898,7 +944,7 @@ describe('FoodService authoritative unavailable-write receipts', () => {
     expect(gateway.calls.filter(call => call.name === 'flush_food_cart')).toHaveLength(2);
   });
 
-  it.each(['total', 'offers'])('preserves a receipt-backed cart when fresh %s no longer matches the write response', async changed => {
+  it.each(['total', 'offers', 'quantity', 'selected-addon', 'item-price'])('preserves a receipt-backed cart when fresh %s no longer matches the write response', async changed => {
     const { gateway, service, c, approval } = await retainedUnavailableSetup();
     gateway.mutate = 'missing-restaurant';
     const original = gateway.call.bind(gateway);
@@ -906,9 +952,12 @@ describe('FoodService authoritative unavailable-write receipts', () => {
       try { return await original(name, args); }
       catch (error) {
         if (name !== 'update_food_cart' || !(error instanceof SwiggyResponseError)) throw error;
-        const receipt = cartFingerprint(gateway.cart());
+        const receipt = cartReceiptFingerprint(gateway.cart(), 'synthetic-r');
         if (changed === 'total') gateway.items[0].total += 1;
-        else gateway.coupon = 'EXTERNAL';
+        if (changed === 'offers') gateway.coupon = 'EXTERNAL';
+        if (changed === 'quantity') gateway.items[0].quantity++;
+        if (changed === 'selected-addon') gateway.items[0].addons.push({ group_id: 'extras', choice_id: 'cheese' });
+        if (changed === 'item-price') gateway.items[0].final_price = 71;
         throw new SwiggyResponseError('UNAVAILABLE', receipt);
       }
     };
@@ -931,7 +980,7 @@ describe('FoodService authoritative unavailable-write receipts', () => {
         if (mismatch === 'extra-item') gateway.items.push({ menu_item_id: 'unapproved', quantity: 1, total: 10, in_stock: 0 });
         if (mismatch === 'wrong-quantity') gateway.items[0].quantity++;
         if (mismatch === 'wrong-restaurant') gateway.mutate = 'wrong-restaurant';
-        throw new SwiggyResponseError('UNAVAILABLE', cartFingerprint(gateway.cart()));
+        throw new SwiggyResponseError('UNAVAILABLE', cartReceiptFingerprint(gateway.cart(), 'synthetic-r'));
       }
     };
     const result = await service.approve(c.id, approval.id);

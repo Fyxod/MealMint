@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { FoodGateway } from "./types.js";
-import { cartData, cartFingerprint } from "./cart.js";
+import { cartData, cartReceiptFingerprint } from "./cart.js";
 
 const allowed = new Set([
   "get_addresses",
@@ -138,7 +138,7 @@ export class LiveFoodGateway implements FoodGateway {
         throw new SwiggyResponseError(data.errorCodes?.includes("INVALID_ADDON") ? "INVALID_ADDON" :
           data.statusCode === 8 || data.errorCodes?.some((x: string) => /UNAVAILABLE|OUT_OF_STOCK|INVALID_ITEM/.test(x)) ? "UNAVAILABLE" : "REJECTED",
           name === "update_food_cart" && data.statusCode === 8 && Array.isArray(cartData(data)?.items) && cartData(data).items.length
-            ? cartFingerprint(data) : undefined);
+            ? cartReceiptFingerprint(data, String(args.restaurantId ?? "")) : undefined);
       return data;
     } catch (e: any) {
       if (e instanceof SwiggyResponseError) throw e;
