@@ -49,6 +49,11 @@ const choiceRefsProperty = {
 };
 export const foodTools: ToolSpec[] = [
   {
+    type: "function", name: "food_current_cart",
+    description: "Read the current Swiggy MCP cart without modifying it. Returns only food counts, reported price and coupon state, never address/session/payment details. Use when reviewing an existing cart or a user-reported app/MCP price discrepancy. This snapshot is not a comparison or a guarantee that mobile checkout matches MCP.",
+    inputSchema: objectSchema({}),
+  },
+  {
     type: "function", name: "food_customization_options",
     description: "Get fresh variant and add-on choices for an observed dish. Ask the user which choices they want unless they explicitly authorized defaults or cheapest choices. No cart writes.",
     inputSchema: objectSchema({ candidateId: { type: "string" } }, ["candidateId"]),
@@ -573,6 +578,34 @@ export class FoodService extends EventEmitter {
     }
     if (!c.request.addressId)
       throw new Error("Ask the user to select a saved delivery address first.");
+    if (name === "food_current_cart") {
+      z.object({}).strict().parse(args);
+      const raw = await this.read(id, "get_food_cart", { addressId: c.request.addressId });
+      const data = cartData(raw);
+      const suppliedItems = Array.isArray(data?.items) ? data.items : null;
+      const items = suppliedItems?.filter((item: any) => item && typeof item === "object" && !Array.isArray(item)) ?? [];
+      const failed = raw?.success === false || raw?.successful === false || raw?.statusCode != null && raw.statusCode !== 0 && raw.statusCode !== 8;
+      const malformed = suppliedItems !== null && items.length !== suppliedItems.length;
+      const unavailable = raw?.statusCode === 8 || items.some((item: any) => item.in_stock === false || item.in_stock === 0);
+      const state = failed || malformed ? "unknown" : unavailable ? "unavailable" : items.length ? "present" :
+        Array.isArray(data?.items) || raw?.statusCode === 0 && raw?.successful !== false && raw?.data === null ? "empty" : "unknown";
+      const amount = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+      const discount = amount(data?.offers?.coupon_discount);
+      return {
+        source: this.gateway.mode, observedAt: new Date().toISOString(), state,
+        items: items.map((item: any) => ({ itemId: typeof item.menu_item_id === "string" || typeof item.menu_item_id === "number" ? String(item.menu_item_id) : null,
+          name: typeof item.name === "string" ? item.name.slice(0, 200) : null,
+          quantity: Number.isSafeInteger(item.quantity) && item.quantity > 0 ? item.quantity : null })),
+        pricing: { itemSubtotal: amount(data?.pricing?.item_total),
+          delivery: amount(data?.pricing?.delivery_charge ?? data?.pricing?.delivery_fee),
+          charges: amount(data?.pricing?.taxes_and_charges),
+          total: unavailable || state !== "present" ? null : amount(data?.pricing?.to_pay) },
+        coupon: { code: typeof data?.offers?.coupon_applied === "string" ? data.offers.coupon_applied.slice(0, 50) : null,
+          discount, positiveDiscount: discount !== null && discount > 0 },
+        freeDeliveryApplied: data?.offers?.free_delivery_applied === true,
+        note: "Read-only gateway snapshot, no cart changes. A printed code with zero discount is not verified coupon savings. If the user reports a lower app checkout total, disclose the mismatch and preserve that cart; do not call this gateway price the cheapest or imply their app offer is invalid. Unavailable/unknown state is not a payable quote.",
+      };
+    }
     if (name === "food_customization_options" || name === "food_customize") {
       const a = z.object({ candidateId: z.string(), variants: z.array(z.any()).optional(), addons: z.array(z.any()).optional() }).strict().parse(args);
       if (name === "food_customization_options") return this.customizationOptions(id, a.candidateId);

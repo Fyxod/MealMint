@@ -1,4 +1,4 @@
-> Current checkpoint — 2026-10-09: controlled live web, Telegram and actual phone-size checks are complete. Source cc481a6 is deployed;260 automated tests and source CI passed. The final section below records cleanup, exact quantities, account state and remaining coupon coverage limits. Earlier dated pending statements are historical.
+> Current checkpoint — 2026-10-10: source9accac2 is deployed;343 automated tests and CI passed. Actual dashboard strict-diet/coupon-provenance retest passed. Owner mobile checkout now proves three Burger King burgers at ₹159 while MCP reports₹267/discount0 at the same outlet locality. New read-only cart tool and both-channel preservation retests are in progress; see [optimization investigation](OPTIMIZATION_RESEARCH.md). Earlier dated pending/completed statements are historical.
 
 # Live integration validation — 2026-10-07
 
