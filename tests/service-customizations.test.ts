@@ -207,9 +207,25 @@ describe('FoodService synthetic customization and coupon regressions', () => {
       const approval = await service.requestComparison(c.id, [configured.id]);
       expect(approval.status).toBe('pending');
     } else {
-      await expect(service.requestComparison(c.id, [configured.id])).rejects.toThrow(/no longer matches/);
+      await expect(service.requestComparison(c.id, [configured.id])).rejects.toThrow(choiceDiet === null ? /diet metadata is unknown/ : /no longer matches/);
     }
     expect(gateway.items).toEqual([]);
+  });
+
+  it('explains unknown diet metadata without silently loosening the filter or starting a comparison', async () => {
+    const { service, gateway, c, base } = await setup();
+    gateway.choiceDiet = null;
+    service.updatePreferences(c.id, { diet: 'veg' });
+    await service.dispatch(c.id, 'food_search', { query: 'burger' });
+    await service.customizationOptions(c.id, base.id);
+    const configured = await service.dispatch(c.id, 'food_customize', { candidateId: base.id,
+      variants: [{ groupId: 'size', choiceId: 'small' }], addons: [{ groupId: 'extras', choiceId: 'cheese' }] });
+    expect(configured.matchesRequest).toBe(false);
+    expect(configured.note).toContain('diet metadata is unknown');
+    await expect(service.dispatch(c.id, 'food_compare', { candidateIds: [configured.candidate.id] })).rejects.toThrow(/diet metadata is unknown/);
+    expect(c.request.diet).toBe('veg');
+    expect(c.approval).toBeNull();
+    expect(gateway.calls.some(call => /update_food_cart|flush_food_cart|apply_food_coupon/.test(call.name))).toBe(false);
   });
 
   it.each([false, null])('re-evaluates diet from the original base when removing a %s dietary addon', async choiceDiet => {

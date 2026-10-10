@@ -23,6 +23,18 @@ Raw authenticated payloads, the owner's screenshot, precise location, runtime tr
 - Recognize narrow, known plain-text coupon rejections without leaking provider diagnostics. A rejected zero-saving marker can be cleared only when all normal approved-food/cart checks still match; uncertain errors or genuine changes still stop.
 - Prompt the agent to optimize against actual food needs and delivered budget, investigate challenged baselines, avoid needless over-budget alternatives and disclose conflicts between the app and MCP.
 
+## 10 October live interface retest
+
+Source `905ec18` was hash-verified, deployed and pushed; [CI 38051969221](https://github.com/Fyxod/MealMint/actions/runs/38051969221) passed. Both application agents used actual `gpt-6-luna` / `max` with the authenticated gateway.
+
+- Telegram's natural exactly-three-burger/₹200 request shortlisted only three Veg Grilled Burgers at The Crosta (₹171.60 listed). After frozen discard/count approval, the application verified **₹198 delivered for three items**, reported no COD-compatible coupons returned and cleared the test cart. This is a dated alternative restaurant result, not Burger King savings or a global minimum.
+- The dashboard froze exactly three accessible Burger King Crispy Veg Burger / Burger Only selections and explicitly displayed the requested FLAT100 trial. The application returned **₹267, over budget**, `attempted: FLAT100`, `rejected: FLAT100`, without counting savings or a cleanup warning.
+- An independent official cart read after both comparisons is the cleanup evidence (protected `optimization-postcomparison-cart.json`). Cropped UI proofs remain private: `.local/hosting/optimization-telegram-198.png` and `.local/hosting/optimization-web-flat100.png`.
+- The initial dashboard run in strict vegetarian mode could not compare a configured choice whose diet metadata was unknown. It preserved the filter but explained the failure too vaguely and exhausted further reads. The controlled coupon diagnostic then explicitly permitted any diet. Follow-up source reports the exact diet mismatch and requires asking before relaxing the filter.
+- That initial agent answer also misattributed the user's reported FLAT100 terms to the gateway. Fresh default/specific-code lookups were empty; a prompted follow-up correctly separated the user hint. Follow-up source adds explicit discovery provenance/returned-code fields and corresponding instructions rather than accepting that wording as a pass.
+
+The follow-up source has 343 passing synthetic tests; deployment and fresh wording checks are recorded separately in project memory. These fixes do not create an offer the official gateway rejects.
+
 ## Research and how it is used
 
 | Source | Evidence or idea | Application / limit |

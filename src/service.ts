@@ -20,7 +20,7 @@ import { defaultRequest } from "./types.js";
 import { redact } from "./security.js";
 import { DirectiveStore } from "./directives.js";
 import { customizationDetails, selectCustomizations, selectionPayload, selectionsMatch, variantsMatch, validateCartAddons } from "./customizations.js";
-import { couponTrialPlan } from "./coupons.js";
+import { couponCode as redeemableCouponCode, couponTrialPlan } from "./coupons.js";
 import { menuItems, menuTruncated, restaurantOpen } from "./menu.js";
 import { SwiggyResponseError } from "./food.js";
 
@@ -187,6 +187,11 @@ export function qualifies(c: Candidate, r: MealRequest) {
     !r.excluded.some((x) => c.name.toLowerCase().includes(x.toLowerCase())) &&
     (!r.budget || unknownSelectionPrice || c.price! * r.quantity <= r.budget || c.dealHypothesis === true)
   );
+}
+function mismatchReason(candidate: Candidate, request: MealRequest) {
+  return request.diet !== "any" && candidate.isVeg === null
+    ? "This configuration's diet metadata is unknown. It cannot pass the selected diet filter; choose another option or ask the user before changing that filter."
+    : "Selected option no longer matches the request. Search again.";
 }
 export class FoodService extends EventEmitter {
   readonly conversations = new Map<string, Conversation>();
@@ -571,7 +576,9 @@ export class FoodService extends EventEmitter {
     if (name === "food_customization_options" || name === "food_customize") {
       const a = z.object({ candidateId: z.string(), variants: z.array(z.any()).optional(), addons: z.array(z.any()).optional() }).strict().parse(args);
       if (name === "food_customization_options") return this.customizationOptions(id, a.candidateId);
-      return { candidate: this.configure(id, a.candidateId, { variants: a.variants, addons: a.addons }, true), note: "Configured without cart changes. Selected payable price requires approved verification." };
+      const configured = this.configure(id, a.candidateId, { variants: a.variants, addons: a.addons }, true);
+      return { candidate: configured, matchesRequest: qualifies(configured, c.request),
+        note: qualifies(configured, c.request) ? "Configured without cart changes. Selected payable price requires approved verification." : mismatchReason(configured, c.request) };
     }
     if (name === "food_search") {
       const a = z
@@ -756,12 +763,20 @@ export class FoodService extends EventEmitter {
           ...(name === "food_menu" && page !== undefined ? { page } : {}),
         },
       );
-      if (name === "food_offers")
+      if (name === "food_offers") {
+        const discovery = couponTrialPlan(raw);
+        const listedCodes = (Array.isArray(raw?.coupon_sections) ? raw.coupon_sections : [])
+          .flatMap((section: any) => Array.isArray(section?.coupons) ? section.coupons : [])
+          .map(redeemableCouponCode).filter((code: string | null): code is string => code !== null);
         return {
           offers: raw,
           requestedCouponTrial: couponCode ?? null,
+          discovery: { visible: discovery.visible, scope: discovery.scope,
+            requestedCodeSource: couponCode ? "user" : null,
+            requestedCodeReturned: couponCode ? listedCodes.some((code: string) => code.toUpperCase() === couponCode.toUpperCase()) : null },
           note: "Contextual visibility, not verified savings. The current gateway filters to cash-on-delivery-compatible coupons; online/card-only offers may be absent. An empty list does not disprove a coupon shown in the Swiggy app. A user-supplied code is queued for the next approved comparison, not verified or applied yet. Applicability may refer to the current cart; proposed items or thresholds can change eligibility. Payment-only offers unverified.",
         };
+      }
       return {
         candidates: this.register(
           c,
@@ -786,13 +801,9 @@ export class FoodService extends EventEmitter {
         })
         .strict()
         .parse(args);
-      const selected = [...new Set(candidateIds)]
-        .map((x) => this.observed(id, x))
-        .filter((x) => qualifies(x, c.request));
-      if (selected.length !== new Set(candidateIds).size)
-        throw new Error(
-          "Selected options no longer match the request. Search again.",
-        );
+      const selected = [...new Set(candidateIds)].map((x) => this.observed(id, x));
+      const mismatch = selected.find(x => !qualifies(x, c.request));
+      if (mismatch) throw new Error(mismatchReason(mismatch, c.request));
       if (name === "food_compare") {
         const approval = await this.requestComparison(
           id,
@@ -829,7 +840,7 @@ export class FoodService extends EventEmitter {
     for (const cid of ids) {
       const x = this.observed(id, cid);
       if (!qualifies(x, c.request))
-        throw new Error("Option no longer matches your request.");
+        throw new Error(mismatchReason(x, c.request));
       if (x.customizable)
         throw new Error(
           "Choose this dish's required variants and add-ons before comparing it.",

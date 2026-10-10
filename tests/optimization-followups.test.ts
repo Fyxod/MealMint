@@ -56,6 +56,7 @@ describe('explicit user coupon hints', () => {
     await service.chat(c.id, 'Please test FLAT100 from my synthetic offer.');
     const result = await hint(service, c.id, candidate.id, 'FLAT100');
     expect(result.requestedCouponTrial).toBe('FLAT100');
+    expect(result.discovery).toEqual({ visible: 0, scope: 'cod-only', requestedCodeSource: 'user', requestedCodeReturned: false });
     expect(gateway.calls.filter(call => call.name === 'fetch_food_coupons').at(-1)?.args).toMatchObject({ restaurantId: 'r1', couponCode: 'FLAT100' });
     expect(gateway.calls.some(call => call.name === 'apply_food_coupon')).toBe(false);
     const approval = await service.requestComparison(c.id, [candidate.id]);
@@ -66,6 +67,18 @@ describe('explicit user coupon hints', () => {
     expect(completed.quotes[0].couponChecks).toMatchObject({ visible: 0, eligible: 0, requested: ['FLAT100'], considered: 1, attempted: ['FLAT100'], untried: [], status: 'checked' });
     expect(couponCheckSummary(completed.quotes[0])).not.toContain('No COD-compatible coupons returned');
     expect((await gateway.call('get_food_cart', { addressId: 'mock-home' })).data.items).toEqual([]);
+  });
+
+  it('reports a provider-returned code separately from eligibility and a queued user hint', async () => {
+    const { gateway, service, c, candidate } = await ready();
+    await service.chat(c.id, 'Please test FLAT100.');
+    gateway.coupons = { coupon_sections: [{ coupons: [{ title: 'Flat100', applicable: false, applicabilityStatus: 'NOT_APPLICABLE' }] }] };
+    const result = await hint(service, c.id, candidate.id, 'FLAT100');
+    expect(result.discovery).toEqual({ visible: 1, scope: 'visible', requestedCodeSource: 'user', requestedCodeReturned: true });
+    expect(result.offers.coupon_sections[0].coupons[0].applicable).toBe(false);
+    expect(gateway.calls.some(call => call.name === 'apply_food_coupon')).toBe(false);
+    const ordinary = await service.dispatch(c.id, 'food_offers', { candidateId: candidate.id });
+    expect(ordinary.discovery).toMatchObject({ requestedCodeSource: null, requestedCodeReturned: null });
   });
 
   it.each(['INVENTED', 'MENU_INJECTED', 'PROVIDER_INJECTED', 'FLAT100'])('rejects an unapproved %s code absent as a token in a user message', async requested => {
