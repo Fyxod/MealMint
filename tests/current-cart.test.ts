@@ -49,9 +49,12 @@ describe('read-only current cart evidence', () => {
   });
   it.each([6, 8])('does not present unavailable food as payable despite an old price and coupon at status %s', async status => {
     const { gateway, service, c } = await ready(); gateway.raw.statusCode = status; gateway.raw.data.items[0].in_stock = 0;
+    gateway.raw.data.offers.coupon_discount = 100;
     const snapshot = await service.dispatch(c.id, 'food_current_cart', {});
     expect(snapshot.state).toBe('unavailable'); expect(snapshot.pricing.total).toBeNull();
     expect(snapshot.items[0].quantity).toBe(3);
+    expect(snapshot.pricing).toEqual({ itemSubtotal: null, delivery: null, charges: null, total: null });
+    expect(snapshot.coupon).toEqual({ code: 'SYNTHETIC100', discount: null, positiveDiscount: false });
   });
   it('recognizes the successful null-cart response separately from an unsupported missing shape', async () => {
     const { gateway, service, c } = await ready();

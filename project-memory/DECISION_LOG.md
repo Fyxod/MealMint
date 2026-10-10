@@ -143,3 +143,7 @@ Eight new synthetic current-cart tests plus the existing suite passed:351tests/1
 ## 2026-10-11 — Overnight unavailable-cart edge case
 
 Source2207dd0 deployed/pushed, archiveSHA256ecdc7e1675c37fc0f6c7513807889ce9989d04fb6b16f4e6457aedcd8a3d635f;CI38092300818passed351tests. Fresh actual Luna max web correctly said its read failed and did not change the cart or claim yesterday's mobile159 as a current verified price. Protected raw official read current-cart-before-readonly-raw-20261011.json shows status6, regular3burgeritems/in_stock0, stale267/discount0. No food mutation occurred. Adapter follow-up allows explicitly unavailable status6/8 get_cart state for diagnostics only, continuing to reject all failed writes and suppress payable totals;359tests/18files/typecheck/buildpassed. Final follow-up deployment and both-channel live checks remain.
+
+## 2026-10-11 — Withhold all unavailable-cart money fields
+
+Source66bd323 deployed/pushed; CI38092440072passed359tests. Actual Luna max dashboard now reads the retained three burger items but described an unavailable payable amount too vaguely and repeated retained subtotal/charges as snapshot prices. Follow-up withholds every monetary field and positive-discount claim outside present state, while retaining food counts and printed code. Prompt explicitly explains food unavailable versus unknown and avoids guessing coupon/payment/reuse causes.359tests/typecheck/buildpassed after this follow-up. Both final-channel wording tests still pending; no cart mutation or new price trial.

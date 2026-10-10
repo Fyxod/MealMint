@@ -591,20 +591,21 @@ export class FoodService extends EventEmitter {
       const state = failed || malformed ? "unknown" : unavailable ? "unavailable" : items.length ? "present" :
         Array.isArray(data?.items) || raw?.statusCode === 0 && raw?.successful !== false && raw?.data === null ? "empty" : "unknown";
       const amount = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
-      const discount = amount(data?.offers?.coupon_discount);
+      const reportedAmount = (value: unknown) => state === "present" ? amount(value) : null;
+      const discount = reportedAmount(data?.offers?.coupon_discount);
       return {
         source: this.gateway.mode, observedAt: new Date().toISOString(), state,
         items: items.map((item: any) => ({ itemId: typeof item.menu_item_id === "string" || typeof item.menu_item_id === "number" ? String(item.menu_item_id) : null,
           name: typeof item.name === "string" ? item.name.slice(0, 200) : null,
           quantity: Number.isSafeInteger(item.quantity) && item.quantity > 0 ? item.quantity : null })),
-        pricing: { itemSubtotal: amount(data?.pricing?.item_total),
-          delivery: amount(data?.pricing?.delivery_charge ?? data?.pricing?.delivery_fee),
-          charges: amount(data?.pricing?.taxes_and_charges),
-          total: unavailable || state !== "present" ? null : amount(data?.pricing?.to_pay) },
+        pricing: { itemSubtotal: reportedAmount(data?.pricing?.item_total),
+          delivery: reportedAmount(data?.pricing?.delivery_charge ?? data?.pricing?.delivery_fee),
+          charges: reportedAmount(data?.pricing?.taxes_and_charges),
+          total: reportedAmount(data?.pricing?.to_pay) },
         coupon: { code: typeof data?.offers?.coupon_applied === "string" ? data.offers.coupon_applied.slice(0, 50) : null,
           discount, positiveDiscount: discount !== null && discount > 0 },
         freeDeliveryApplied: data?.offers?.free_delivery_applied === true,
-        note: "Read-only gateway snapshot, no cart changes. A printed code with zero discount is not verified coupon savings. If the user reports a lower app checkout total, disclose the mismatch and preserve that cart; do not call this gateway price the cheapest or imply their app offer is invalid. Unavailable/unknown state is not a payable quote.",
+        note: "Read-only gateway snapshot, no cart changes. A printed code with zero discount is not verified coupon savings. If the user reports a lower app checkout total, disclose the mismatch and preserve that cart; do not call this gateway price the cheapest or imply their app offer is invalid. When state is unavailable the gateway marks food unavailable; unknown state cannot establish availability. Monetary fields are withheld outside present state: retained items/code do not establish fresh prices or current coupon eligibility.",
       };
     }
     if (name === "food_customization_options" || name === "food_customize") {
