@@ -25,3 +25,14 @@ export function cartReceiptFingerprint(raw: any, restaurantId: string) {
     restaurant: { id: String(c?.restaurant?.id ?? c?.restaurant?.restaurant_id ?? c?.restaurant?.restaurantId ?? restaurantId) },
   });
 }
+
+// A confirmed coupon rejection can leave the attempted code as a zero-saving
+// marker. Accept only that exact change, preserving every ordinary cart guard.
+export function rejectedCouponMarkerOnly(before: any, after: any, code: string): boolean {
+  const previous = cartData(before), current = cartData(after);
+  if (!previous?.offers || !current?.offers || String(current.offers.coupon_applied ?? "").toUpperCase() !== code.toUpperCase() ||
+      current.offers.coupon_discount !== 0 || Number(previous.offers.coupon_discount ?? 0) !== 0) return false;
+  return cartFingerprint(before) === cartFingerprint({ ...current,
+    offers: { ...current.offers, coupon_applied: previous.offers.coupon_applied },
+  });
+}

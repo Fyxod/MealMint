@@ -1330,3 +1330,4 @@ h1 > span {
 .custom-choice input { accent-color: #16865b; width: 18px; height: 18px; flex-shrink: 0; }
 .custom-choice small { white-space: nowrap; }
 .customizations .modal-actions { position: sticky; bottom: -28px; background: white; padding: 14px 0; }
+.coupon-coverage { color: var(--muted, #66736c); font-size: 12px; line-height: 1.5; margin: 10px 0; }

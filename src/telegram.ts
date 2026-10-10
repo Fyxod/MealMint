@@ -3,6 +3,7 @@ import type { FoodService } from "./service.js";
 import type { Address, ChoiceRef, CustomizationDetails, Conversation } from "./types.js";
 import { SecretStore, redact, safeEqual } from "./security.js";
 import { cartPlanLabel } from "./plans.js";
+import { couponCheckSummary } from "./coupons.js";
 
 export class TelegramBot {
   private offset = 0;
@@ -347,7 +348,7 @@ export class TelegramBot {
         c.quotes
           .map(
             (q, i) =>
-              `${i + 1}. ${q.name} · ${q.restaurant}\n₹${q.total.toFixed(2)} delivered for ${q.quantity} ${q.bundle ? "bundle(s)" : "item(s)"}${q.coupon ? ` · ${q.coupon}${q.discount > 0 ? `, saving ₹${q.discount}` : ""}` : ""}${q.withinBudget ? "" : " · over budget"}`,
+              `${i + 1}. ${q.name} · ${q.restaurant}\n₹${q.total.toFixed(2)} delivered for ${q.quantity} ${q.bundle ? "bundle(s)" : "item(s)"}${q.coupon ? ` · ${q.coupon}${q.discount > 0 ? `, saving ₹${q.discount}` : ""}` : ""}${q.withinBudget ? "" : " · over budget"}${couponCheckSummary(q) ? `\n${couponCheckSummary(q)}` : ""}`,
           )
           .join("\n\n") +
           `\n\n${c.comparison && c.comparison.checked < c.comparison.requested ? `Partial comparison: ${c.comparison.checked}/${c.comparison.requested} options checked. ` : ""}Lowest among successfully checked options. Refresh before checkout.`,
@@ -379,7 +380,7 @@ export class TelegramBot {
             c.approval.plans
               .map(
                 (x) =>
-                  `${cartPlanLabel(x, c.approval!.request.quantity)} · ${x.restaurant}\nExact item counts above · ${x.price === null ? "Subtotal needs cart check" : `₹${(x.price * c.approval!.request.quantity).toFixed(2)} listed subtotal`}`,
+                  `${cartPlanLabel(x, c.approval!.request.quantity)} · ${x.restaurant}\nExact item counts above · ${x.price === null ? "Subtotal needs cart check" : `₹${(x.price * c.approval!.request.quantity).toFixed(2)} listed subtotal`}${c.approval!.couponHints?.[x.restaurantId]?.length ? `\nAlso test requested coupon: ${c.approval!.couponHints[x.restaurantId].join(", ")} (unverified)` : ""}`,
               )
               .join("\n\n") +
             "\n\nThe test cart will be cleared afterward. No orders will be placed.",

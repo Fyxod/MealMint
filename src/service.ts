@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { cartData, cartFingerprint, cartReceiptFingerprint } from "./cart.js";
+import { cartData, cartFingerprint, cartReceiptFingerprint, rejectedCouponMarkerOnly } from "./cart.js";
 import { cartPlanItems } from "./plans.js";
 import { z } from "zod";
 import type {
@@ -20,7 +20,8 @@ import { defaultRequest } from "./types.js";
 import { redact } from "./security.js";
 import { DirectiveStore } from "./directives.js";
 import { customizationDetails, selectCustomizations, selectionPayload, selectionsMatch, variantsMatch, validateCartAddons } from "./customizations.js";
-import { couponCode } from "./coupons.js";
+import { couponTrialPlan } from "./coupons.js";
+import { menuItems, menuTruncated, restaurantOpen } from "./menu.js";
 import { SwiggyResponseError } from "./food.js";
 
 export const preferencesSchema = z
@@ -103,10 +104,11 @@ export const foodTools: ToolSpec[] = [
     type: "function",
     name: "food_search",
     description:
-      "Search dishes across restaurants for a query. Returns filtered candidates and pagination; final fees not yet known. budgetCollection is synthetic-only and unsupported by the live gateway.",
+      "Search dishes across restaurants, or pass an observed candidateId to search its restaurant for regular/promotional listings or useful additions. Returns only confirmed-open restaurant candidates, filtered for preferences, plus pagination. Final fees unknown. budgetCollection is synthetic-only.",
     inputSchema: objectSchema(
       {
         query: { type: "string" },
+        candidateId: { type: "string" },
         offset: { type: "integer", minimum: 0 },
         budgetCollection: { type: "boolean" },
         includePotentialDeals: { type: "boolean" },
@@ -143,7 +145,7 @@ export const foodTools: ToolSpec[] = [
     name: "food_menu",
     description:
       "Browse an observed candidate restaurant menu. Use nextPage for more categories when returned. Only use an observed candidate handle.",
-    inputSchema: objectSchema({ candidateId: { type: "string" }, page: { type: "integer", minimum: 1 } }, [
+    inputSchema: objectSchema({ candidateId: { type: "string" }, page: { type: "integer", minimum: 1 }, includePotentialDeals: { type: "boolean" } }, [
       "candidateId",
     ]),
   },
@@ -151,8 +153,8 @@ export const foodTools: ToolSpec[] = [
     type: "function",
     name: "food_offers",
     description:
-      "Get visible contextual coupons for an observed candidate. Visibility does not establish applicability. Payment-only offers remain unverified.",
-    inputSchema: objectSchema({ candidateId: { type: "string" } }, [
+      "Get contextual coupons for an observed candidate. Optional couponCode must be explicitly supplied by the user in this chat; it queues that code for a fresh approved cart trial even if the gateway list is empty. Ordinary restaurant coupons only; payment-only savings remain unverified. Never invent codes.",
+    inputSchema: objectSchema({ candidateId: { type: "string" }, couponCode: { type: "string", pattern: "^[A-Za-z0-9_-]{1,50}$" } }, [
       "candidateId",
     ]),
   },
@@ -193,6 +195,8 @@ export class FoodService extends EventEmitter {
   private cartBusy = false;
   private cancelled = new Set<string>();
   private customizationMenus = new Map<string, { details: CustomizationDetails; at: number }>();
+  private couponHints = new Map<string, Record<string, string[]>>();
+  private customizationCursors = new Map<string, { offset: number; at: number }>();
   readonly directives: DirectiveStore;
   constructor(
     readonly gateway: FoodGateway,
@@ -242,6 +246,8 @@ export class FoodService extends EventEmitter {
       throw new Error("Stop the current operation before starting fresh.");
     this.conversations.delete(id);
     this.registries.delete(id);
+    this.couponHints.delete(id);
+    for (const key of this.customizationCursors.keys()) if (key.startsWith(id + ":")) this.customizationCursors.delete(key);
     this.reads.delete(id);
     this.cancelled.delete(id);
     void this.agent.forget?.(id).catch(() => {});
@@ -299,6 +305,8 @@ export class FoodService extends EventEmitter {
     c.candidates = [];
     c.quotes = [];
     this.registries.set(c.id, new Map());
+    this.couponHints.delete(c.id);
+    for (const key of this.customizationCursors.keys()) if (key.startsWith(c.id + ":")) this.customizationCursors.delete(key);
     for (const key of this.customizationMenus.keys()) if (key.startsWith(c.id + ":")) this.customizationMenus.delete(key);
     c.coverage = { queries: [], restaurants: 0, hasMore: false };
   }
@@ -386,16 +394,37 @@ export class FoodService extends EventEmitter {
   async customizationOptions(id: string, candidateId: string) {
     const c = this.get(id), candidate = this.observed(id, candidateId);
     // A manual edit starts a fresh operation after a completed cancellation.
-    if (!c.busy) this.cancelled.delete(id);
+    if (!c.busy) { this.cancelled.delete(id); this.reads.set(id, 0); }
     if (candidate.lines || !c.request.addressId) throw new Error("Configure individual dishes before combining them.");
     const addressId = c.request.addressId;
-    const raw = await this.read(id, "search_menu", {
-      addressId, restaurantIdOfAddedItem: candidate.restaurantId,
-      query: candidate.originalName ?? candidate.name,
-    });
-    if (c.request.addressId !== addressId) throw new Error("Delivery address changed. Open the choices again.");
-    const item = (raw.items ?? raw.dishes ?? []).find((x: any) => String(x.menu_item_id ?? x.id) === candidate.itemId);
-    if (!item || !(item.inStock === 1 || item.inStock === true)) throw new Error("This dish is no longer available. Search again.");
+    const key = `${id}:${candidateId}`;
+    const cursor = this.customizationCursors.get(key);
+    let offset = cursor && cursor.at + 300000 > Date.now() ? cursor.offset : 0;
+    let item: any, more = false;
+    for (let page = 0; page < 5; page++) {
+      const raw = await this.read(id, "search_menu", {
+        addressId, restaurantIdOfAddedItem: candidate.restaurantId,
+        query: candidate.originalName ?? candidate.name,
+        ...(offset ? { offset } : {}),
+      });
+      if (c.request.addressId !== addressId) throw new Error("Delivery address changed. Open the choices again.");
+      item = (raw.items ?? raw.dishes ?? []).find((x: any) => String(x.menu_item_id ?? x.id) === candidate.itemId &&
+        (x.restaurantId == null && x.restaurant_id == null || String(x.restaurantId ?? x.restaurant_id) === candidate.restaurantId));
+      if (item) break;
+      more = raw.hasMore === true;
+      const next = Number(raw.nextOffset);
+      if (!more) break;
+      if (!Number.isSafeInteger(next) || next <= offset) {
+        this.customizationCursors.delete(key);
+        throw new Error("Swiggy returned incomplete customization search with an invalid page cursor. Availability is not established.");
+      }
+      offset = next;
+      this.customizationCursors.set(key, { offset, at: Date.now() });
+    }
+    if (!item && more) throw new Error("Customization search is incomplete. Request choices again to continue the next pages; this does not mean the dish is unavailable.");
+    this.customizationCursors.delete(key);
+    if (!item) throw new Error("Swiggy did not return this listing's customization details. Its menu and search may disagree; choose another listing.");
+    if (!(item.inStock === 1 || item.inStock === true)) throw new Error("This dish is no longer available. Search again.");
     const details = customizationDetails(item);
     this.customizationMenus.set(`${id}:${candidateId}`, { details, at: Date.now() });
     return { candidateId, name: candidate.originalName ?? candidate.name, details };
@@ -449,7 +478,7 @@ export class FoodService extends EventEmitter {
         !rid ||
         !itemId ||
         !r ||
-        !(r.availabilityStatus === "OPEN" || r.isOpen === true)
+        !restaurantOpen(r)
       )
         continue;
       const price =
@@ -519,6 +548,7 @@ export class FoodService extends EventEmitter {
         ),
         quotes: c.quotes,
         lastComparison: c.comparison ?? null,
+        requestedCouponTrials: this.couponHints.get(id) ?? {},
         approval: c.approval ? { status: c.approval.status } : null,
         coverage: c.coverage,
         source: this.gateway.mode,
@@ -547,6 +577,7 @@ export class FoodService extends EventEmitter {
       const a = z
         .object({
           query: z.string().trim().min(1).max(120),
+          candidateId: z.string().optional(),
           offset: z.number().int().min(0).optional(),
           budgetCollection: z.boolean().optional(),
           includePotentialDeals: z.boolean().optional(),
@@ -556,7 +587,13 @@ export class FoodService extends EventEmitter {
       if (a.budgetCollection && this.gateway.mode === "live")
         throw new Error("The current live Swiggy catalogue does not support the ₹99 collection filter. Search by dish without budgetCollection instead.");
       this.status(c, `Searching ${a.query}`);
-      const raw = await this.read(id, "search_restaurants", {
+      const scoped = a.candidateId ? this.observed(id, a.candidateId) : null;
+      const scopeMenu = scoped ? await this.read(id, "get_restaurant_menu", {
+        addressId: c.request.addressId, restaurantId: scoped.restaurantId, page: 1,
+      }) : null;
+      if (scoped && !restaurantOpen(scopeMenu?.restaurant))
+        throw new Error("This restaurant is no longer confirmed open. Search for open alternatives.");
+      const raw = scoped ? { restaurants: [scopeMenu.restaurant] } : await this.read(id, "search_restaurants", {
         addressId: c.request.addressId,
         query: a.query,
         ...(a.offset !== undefined ? { offset: a.offset } : {}),
@@ -568,6 +605,7 @@ export class FoodService extends EventEmitter {
       const menu = dishes.length ? raw : await this.read(id, "search_menu", {
         addressId: c.request.addressId,
         query: a.query,
+        ...(scoped ? { restaurantIdOfAddedItem: scoped.restaurantId } : {}),
         ...(a.offset !== undefined ? { offset: a.offset } : {}),
         ...(c.request.diet === "veg" ? { vegFilter: 1 } : {}),
       });
@@ -575,7 +613,9 @@ export class FoodService extends EventEmitter {
       c.coverage.hasMore ||= !!menu.hasMore;
       const candidates = this.register(
         c,
-        dishes.length ? dishes : menu.items ?? [],
+        (dishes.length ? dishes : menu.items ?? []).map((item: any) =>
+          scoped && item.restaurantId == null && item.restaurant_id == null
+            ? { ...item, restaurantId: scoped.restaurantId } : item),
         raw.restaurants ?? [],
         a.includePotentialDeals,
       );
@@ -687,35 +727,52 @@ export class FoodService extends EventEmitter {
       };
     }
     if (name === "food_menu" || name === "food_offers") {
-      const { candidateId, page } = z
-          .object({ candidateId: z.string(), page: z.number().int().min(1).max(100).optional() })
+      const { candidateId, page, includePotentialDeals, couponCode } = z
+          .object({ candidateId: z.string(), page: z.number().int().min(1).max(100).optional(), includePotentialDeals: z.boolean().optional(), couponCode: z.string().regex(/^[A-Za-z0-9_-]{1,50}$/).optional() })
           .strict()
           .parse(args),
         candidate = this.observed(id, candidateId);
+      if (couponCode) {
+        if (name !== "food_offers" || !c.messages.some(message => message.role === "user" &&
+            message.text.toUpperCase().split(/[^A-Z0-9_-]+/).includes(couponCode.toUpperCase())))
+          throw new Error("Only queue coupon codes explicitly supplied by the user in this chat. Never guess a code.");
+        const hints = this.couponHints.get(id) ?? {};
+        const codes = hints[candidate.restaurantId] ?? [];
+        if (!codes.some(code => code.toUpperCase() === couponCode.toUpperCase())) {
+          if (codes.length >= 3) throw new Error("At most three user-supplied coupon codes per restaurant per request.");
+          hints[candidate.restaurantId] = [...codes, couponCode];
+          this.couponHints.set(id, hints);
+          if (c.approval?.status === "pending") c.approval.status = "cancelled";
+          this.changed(c);
+        }
+      }
       const raw = await this.read(
         id,
         name === "food_menu" ? "get_restaurant_menu" : "fetch_food_coupons",
         {
           addressId: c.request.addressId,
           restaurantId: candidate.restaurantId,
+          ...(couponCode ? { couponCode } : {}),
           ...(name === "food_menu" && page !== undefined ? { page } : {}),
         },
       );
       if (name === "food_offers")
         return {
           offers: raw,
-          note: "Contextual visibility, not verified savings. The current gateway filters to cash-on-delivery-compatible coupons; online/card-only offers may be absent. Applicability may refer to the current cart; proposed items or thresholds can change eligibility. Check the proposed cart through approved comparison. Payment-only offers unverified.",
+          requestedCouponTrial: couponCode ?? null,
+          note: "Contextual visibility, not verified savings. The current gateway filters to cash-on-delivery-compatible coupons; online/card-only offers may be absent. An empty list does not disprove a coupon shown in the Swiggy app. A user-supplied code is queued for the next approved comparison, not verified or applied yet. Applicability may refer to the current cart; proposed items or thresholds can change eligibility. Payment-only offers unverified.",
         };
       return {
         candidates: this.register(
           c,
-          (raw.items ?? (raw.categories ?? []).flatMap((category: any) => category.items ?? [])).map((x: any) => ({
+          menuItems(raw).map((x: any) => ({
             ...x,
             restaurantId: candidate.restaurantId,
           })),
           [raw.restaurant],
+          includePotentialDeals,
         ),
-        truncated: !!raw.truncated || !!raw.hasMore || (raw.categories ?? []).some((category: any) => category.hasMoreItems === true),
+        truncated: menuTruncated(raw),
         nextPage: raw.hasMore === true && Number.isSafeInteger(raw.page) ? raw.page + 1 : undefined,
       };
     }
@@ -745,7 +802,7 @@ export class FoodService extends EventEmitter {
           status: approval.status,
           discardExisting: approval.discardExisting,
           selectedCount: approval.candidateIds.length,
-          plans: approval.plans.map(plan => ({ candidateId: plan.id, items: cartPlanItems(plan, approval.request.quantity) })),
+          plans: approval.plans.map(plan => ({ candidateId: plan.id, items: cartPlanItems(plan, approval.request.quantity), requestedCoupons: approval.couponHints?.[plan.restaurantId] ?? [] })),
           expiresAt: approval.expiresAt,
           note: "The user must approve through the application controls.",
         };
@@ -798,6 +855,7 @@ export class FoodService extends EventEmitter {
       fingerprint: cartFingerprint(cart),
       status: "pending",
       discardExisting: (cartData(cart)?.items?.length ?? 0) > 0,
+      couponHints: structuredClone(Object.fromEntries(plans.map(plan => [plan.restaurantId, this.couponHints.get(id)?.[plan.restaurantId] ?? []]))),
     };
     this.changed(c);
     return c.approval;
@@ -848,6 +906,11 @@ export class FoodService extends EventEmitter {
         const baseline = await this.rebuild(c, x, expected, value => { expected = value; });
         expected = cartFingerprint(baseline);
         const baselineQuote = this.quote(c, x, baseline);
+        const couponChecks: NonNullable<Quote["couponChecks"]> = {
+          status: "pending", scope: "visible", visible: 0, eligible: 0,
+          attempted: [], rejected: [], untried: [],
+        };
+        baselineQuote.couponChecks = couponChecks;
         trials.push(baselineQuote);
         const recordBest = () => {
           const best = [...trials].sort((a, b) => a.total - b.total)[0];
@@ -862,25 +925,15 @@ export class FoodService extends EventEmitter {
           addressId: c.request.addressId,
           restaurantId: x.restaurantId,
         });
-        // The live coupon id is an internal UUID; the redeemable code is separate.
-        const codes: string[] = (coupons.coupon_sections ?? [])
-          .flatMap((s: any) => s.coupons ?? [])
-          .filter(
-            (o: any) =>
-              (o.applicable === true ||
-                o.applicabilityStatus === "APPLICABLE") &&
-              !/card|online|bank|upi/i.test(JSON.stringify(o)),
-          )
-          .map(couponCode)
-          .filter(
-            (s: any) =>
-              typeof s === "string" && /^[A-Za-z0-9_-]{1,50}$/.test(s),
-          )
-          .filter(
-            (code: string, index: number, codes: string[]) =>
-              codes.indexOf(code) === index,
-          )
-          .slice(0, 3);
+        const plan = couponTrialPlan(coupons);
+        const requested = a.couponHints?.[x.restaurantId] ?? [];
+        const allCodes = [...requested, ...plan.codes, ...plan.untried].filter((code, index, values) =>
+          values.findIndex(value => value.toUpperCase() === code.toUpperCase()) === index);
+        Object.assign(couponChecks, { visible: plan.visible, eligible: plan.eligible,
+          scope: plan.scope, untried: allCodes,
+          ...(requested.length ? { requested: [...requested], considered: allCodes.length } : {}),
+        });
+        const codes = allCodes.slice(0, 5);
         for (const code of codes) {
           if (this.cancelled.has(id)) break;
           const reset = await this.rebuild(c, x, expected, value => { expected = value; });
@@ -888,15 +941,23 @@ export class FoodService extends EventEmitter {
           await this.assertCart(c, expected);
           let applied;
           try {
+            couponChecks.attempted.push(code);
             applied = await this.gateway.call("apply_food_coupon", {
               addressId: c.request.addressId,
               couponCode: code,
             });
           } catch (error) {
             if (!(error instanceof SwiggyResponseError) || error.reason !== "REJECTED") throw error;
-            // A confirmed rejection can be skipped only if the verified cart
-            // is unchanged. Uncertain writes/transport errors still stop.
-            await this.assertCart(c, expected);
+            // A rejected code can remain as a zero-saving marker. Only accept
+            // that precise mutation on the approved food; uncertain writes and
+            // changes to actual contents, stock, prices or other offers stop.
+            const rejectedCart = await this.gateway.call("get_food_cart", { addressId: c.request.addressId });
+            if (cartFingerprint(rejectedCart) !== expected &&
+                !(this.approvedCartMatches(c, x, rejectedCart) && rejectedCouponMarkerOnly(reset, rejectedCart, code)))
+              throw new Error("Cart changed during coupon rejection. Inspect it in Swiggy.");
+            expected = cartFingerprint(rejectedCart);
+            couponChecks.rejected.push(code);
+            couponChecks.untried = couponChecks.untried.filter(value => value !== code);
             c.comparison.issues.push(`Coupon ${code} was rejected; its savings were not counted.`);
             continue;
           }
@@ -908,10 +969,13 @@ export class FoodService extends EventEmitter {
           if (cartFingerprint(confirmed) !== expected)
             throw new Error("Cart changed during coupon verification.");
           const q = this.quote(c, x, confirmed);
-          if (q.coupon === code && q.total < baselineQuote.total)
+          q.couponChecks = couponChecks;
+          couponChecks.untried = couponChecks.untried.filter(value => value !== code);
+          if (q.coupon?.toUpperCase() === code.toUpperCase() && q.total < baselineQuote.total)
             trials.push(q);
           recordBest();
         }
+        if (!this.cancelled.has(id)) couponChecks.status = "checked";
         recordBest();
       }
       c.quotes.sort((a, b) => a.total - b.total);

@@ -81,6 +81,17 @@ export interface Quote {
   withinBudget: boolean;
   source: "mock" | "live";
   bundle?: boolean;
+  couponChecks?: {
+    status: "pending" | "checked";
+    scope: "cod-only" | "visible";
+    visible: number;
+    eligible: number;
+    attempted: string[];
+    rejected: string[];
+    untried: string[];
+    requested?: string[];
+    considered?: number;
+  };
 }
 export interface Approval {
   id: string;
@@ -91,6 +102,7 @@ export interface Approval {
   fingerprint: string;
   status: "pending" | "running" | "done" | "cancelled";
   discardExisting: boolean;
+  couponHints?: Record<string, string[]>;
 }
 export interface Message {
   id: string;

@@ -111,6 +111,13 @@ export class LiveFoodGateway implements FoodGateway {
       const result = await (
         await this.connection()
       ).callTool({ name, arguments: args });
+      // Coupon rejection may be plain text rather than the usual JSON envelope.
+      // Match only known rejection messages; do not expose provider report IDs
+      // or turn arbitrary transport failures into a safe-to-retry rejection.
+      if (name === "apply_food_coupon" && result.isError === true &&
+          (result.content as any[])?.some(block => block.type === "text" &&
+            /^(?:Coupon does not exist|Invalid coupon code|Coupon is not applicable)(?:\r?\n|[.!]|$)/i.test(String(block.text).trim())))
+        throw new SwiggyResponseError("REJECTED");
       let data: any = result.structuredContent;
       if (!data) {
         const block = (result.content as any[])?.find((x) => x.type === "text");

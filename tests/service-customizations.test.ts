@@ -734,11 +734,11 @@ describe('FoodService coupon rejection recovery', () => {
 
   it('aborts a typed rejection if the cart changed, retaining the baseline and leaving the unrecognized cart untouched', async () => {
     const { gateway, result, applied } = await couponFailureSetup(['MUTATING', 'GOOD20']);
-    expect(result.error).toContain('Cart changed outside this comparison');
+    expect(result.error).toContain('Cart changed during coupon rejection');
     expect(result.error).toContain('could not be safely cleared');
     expect(result.quotes[0]).toMatchObject({ coupon: null, total: 90 });
     expect(result.comparison?.issues).toEqual(expect.arrayContaining([
-      expect.stringContaining('Cart changed outside this comparison'),
+      expect.stringContaining('Cart changed during coupon rejection'),
       expect.stringContaining('could not be safely cleared'),
     ]));
     expect(applied).toEqual(['MUTATING']);

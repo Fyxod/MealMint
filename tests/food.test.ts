@@ -268,6 +268,40 @@ describe('LiveFoodGateway', () => {
     expect(error.cartFingerprint).toBeUndefined();
   });
 
+  it.each(['Coupon does not exist', 'Invalid coupon code', 'Coupon is not applicable'])('classifies known coupon rejection %s without exposing report IDs or retrying the write', async rejection => {
+    sdk.client.callTool.mockResolvedValue({ isError: true, content: [{ type: 'text', text: `${rejection}\nReport ID: synthetic-private-report\nsid=synthetic-private-session` }] });
+    const error = await gateway().call('apply_food_coupon', { couponCode: 'SYNTHETIC' }).catch(error => error);
+    expect(error).toBeInstanceOf(SwiggyResponseError);
+    expect(error.reason).toBe('REJECTED');
+    expect(Object.getOwnPropertyNames(error).map(key => String(error[key])).join(' ')).not.toContain('synthetic-private');
+    expect(error.cartFingerprint).toBeUndefined();
+    expect(sdk.client.callTool).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    'Upstream timeout while checking coupon',
+    'Transport lost: Coupon does not exist',
+    'Coupon does not exist but transaction state is uncertain',
+  ])('keeps unrelated or ambiguous coupon error text uncertain: %s', async text => {
+    sdk.client.callTool.mockResolvedValue({ isError: true, content: [{ type: 'text', text: `${text}\nReport ID: synthetic-private-report` }] });
+    const error = await gateway().call('apply_food_coupon', { couponCode: 'SYNTHETIC' }).catch(error => error);
+    expect(error).not.toBeInstanceOf(SwiggyResponseError);
+    expect(error.message).not.toContain('synthetic-private');
+    expect(error.message).toContain('writes are never retried automatically');
+    expect(sdk.client.callTool).toHaveBeenCalledOnce();
+  });
+
+  it('does not classify identical text from a transport exception or a different tool as safe coupon rejection', async () => {
+    sdk.client.callTool.mockRejectedValueOnce(new Error('Coupon does not exist\nReport ID: synthetic-private-report'));
+    const transportError = await gateway().call('apply_food_coupon', {}).catch(error => error);
+    expect(transportError).not.toBeInstanceOf(SwiggyResponseError);
+    sdk.client.callTool.mockResolvedValueOnce({ isError: true, content: [{ type: 'text', text: 'Coupon does not exist\nReport ID: synthetic-private-report' }] });
+    const otherToolError = await gateway().call('update_food_cart', {}).catch(error => error);
+    expect(otherToolError).not.toBeInstanceOf(SwiggyResponseError);
+    expect(`${transportError.message} ${otherToolError.message}`).not.toContain('synthetic-private');
+    expect(sdk.client.callTool).toHaveBeenCalledTimes(2);
+  });
+
   it('waits for the local write window before making another remote call', async () => {
     vi.useFakeTimers();
     const live = gateway();

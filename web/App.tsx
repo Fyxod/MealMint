@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { Address, Candidate, ChoiceRef, CustomizationDetails, Conversation, UserDirective } from "../src/types";
 import { cartPlanLabel } from "../src/plans";
+import { couponCheckSummary } from "../src/coupons";
 
 const money = (n: number | null) =>
   n === null
@@ -607,6 +608,7 @@ export function App() {
                           </div>
                         )}
                       </dl>
+                      {couponCheckSummary(q) && <p className="coupon-coverage">{couponCheckSummary(q)}</p>}
                       <div className="quote-bottom">
                         {q.withinBudget ? (
                           <span>
@@ -826,6 +828,7 @@ export function App() {
                     {plan.restaurant} · Exact item counts above ·{" "}
                     {money(plan.price === null ? null : plan.price * chat.approval!.request.quantity)} listed
                   </small>
+                  {!!chat.approval?.couponHints?.[plan.restaurantId]?.length && <small>Also test requested coupon: {chat.approval.couponHints[plan.restaurantId].join(", ")} (unverified)</small>}
                 </li>
               ))}
             </ul>

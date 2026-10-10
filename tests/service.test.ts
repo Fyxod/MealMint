@@ -306,7 +306,7 @@ describe('FoodService', () => {
     expect(bundle.finalItems).toEqual(expected);
     expect(bundle.bundleCount).toBe(bundleCount);
     const toolApproval = await service.dispatch(conversation.id, 'food_compare', { candidateIds: [bundle.candidate.id] });
-    expect(toolApproval.plans).toEqual([{ candidateId: bundle.candidate.id, items: expected }]);
+    expect(toolApproval.plans).toEqual([{ candidateId: bundle.candidate.id, items: expected, requestedCoupons: [] }]);
     const approval = conversation.approval!;
     expect(approval.request.quantity).toBe(bundleCount);
     expect(approval.plans[0].lines?.[0].quantity).toBe(3);
@@ -336,7 +336,7 @@ describe('FoodService', () => {
     expect(bundle.finalItems).toEqual(expected);
     expect(bundle.bundleCount).toBe(2);
     const toolApproval = await service.dispatch(conversation.id, 'food_compare', { candidateIds: [bundle.candidate.id] });
-    expect(toolApproval.plans).toEqual([{ candidateId: bundle.candidate.id, items: expected }]);
+    expect(toolApproval.plans).toEqual([{ candidateId: bundle.candidate.id, items: expected, requestedCoupons: [] }]);
     const calls = vi.spyOn(gateway, 'call');
     const result = await service.approve(conversation.id, conversation.approval!.id);
     expect(result.error).toBeNull();
