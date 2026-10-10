@@ -1,5 +1,7 @@
 # Next checkpoint
 
+LATEST 2026-10-11:2207dd0deployed/pushed/CI38092300818passed. Currentofficialread status6 with3regularBKitems/in_stock0 and stale267; preservecart. Actualweb honestread-failure/nochangespassed. Follow-up unavailable-cart diagnostic fix359tests/typecheck/buildpass; commit/deploy/push it, then actual Luna max web/Telegram read-only retests. No replacement approvals or writes.
+
 LATEST 2026-10-11: read-only source351tests/18files/typecheck/buildpassed. Commit/deploy/push, then actual Luna max web/Telegram read-only responses; preserve whatever current ownercart now contains after overnight gap. Runtime still9accac2 until deployment. Prior records below preserve10October mobile159 evidence.
 
 ACTIVE 2026-10-10: `9accac2` deployed/pushed/CI passed; dashboard diet/provenance retest passed using actual gpt-6-luna/max. Owner's new mobile cart is three regular BK burgers/FLAT100/₹159 payable, same outlet locality as MCP search. Current MCP read still gives ₹267/discount0. Preserve the current three-item owner cart. No active comparison, no new coupon writes, no orders/payments/support sends. Do not portray the earlier Crosta₹198 or BK₹267 as the cheapest outcome.

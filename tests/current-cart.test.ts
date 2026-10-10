@@ -47,8 +47,8 @@ describe('read-only current cart evidence', () => {
     expect(snapshot.coupon).toMatchObject({ discount: 100, positiveDiscount: true });
     expect(snapshot.pricing.total).toBe(159); expect(c.quotes).toEqual([]);
   });
-  it('does not present unavailable food as payable despite an old price and coupon', async () => {
-    const { gateway, service, c } = await ready(); gateway.raw.statusCode = 8; gateway.raw.data.items[0].in_stock = 0;
+  it.each([6, 8])('does not present unavailable food as payable despite an old price and coupon at status %s', async status => {
+    const { gateway, service, c } = await ready(); gateway.raw.statusCode = status; gateway.raw.data.items[0].in_stock = 0;
     const snapshot = await service.dispatch(c.id, 'food_current_cart', {});
     expect(snapshot.state).toBe('unavailable'); expect(snapshot.pricing.total).toBeNull();
     expect(snapshot.items[0].quantity).toBe(3);

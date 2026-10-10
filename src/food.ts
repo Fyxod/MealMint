@@ -136,9 +136,10 @@ export class LiveFoodGateway implements FoodGateway {
       if (!data) throw new Error("Swiggy returned no structured data.");
       if (data.success === true && "data" in data) data = data.data;
       if (!data) throw new Error("Swiggy returned no structured data.");
-      // Status 8 is an out-of-stock cart. Its item state is still readable for
-      // identity checks and cleanup, but must never become a payable quote.
-      const readableUnavailableCart = name === "get_food_cart" && data.statusCode === 8 &&
+      // Observed status 6/8 carts can retain explicit out-of-stock item state.
+      // Read that state for diagnostics/identity only; never accept a write or
+      // infer availability from the stale prices in these responses.
+      const readableUnavailableCart = name === "get_food_cart" && [6, 8].includes(data.statusCode) &&
         data.successful !== false && Array.isArray(data.data?.items) &&
         data.data.items.some((item: any) => item.in_stock === 0 || item.in_stock === false);
       if (!readableUnavailableCart && (data.successful === false || (typeof data.statusCode === "number" && data.statusCode !== 0)))

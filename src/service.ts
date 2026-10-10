@@ -584,9 +584,10 @@ export class FoodService extends EventEmitter {
       const data = cartData(raw);
       const suppliedItems = Array.isArray(data?.items) ? data.items : null;
       const items = suppliedItems?.filter((item: any) => item && typeof item === "object" && !Array.isArray(item)) ?? [];
-      const failed = raw?.success === false || raw?.successful === false || raw?.statusCode != null && raw.statusCode !== 0 && raw.statusCode !== 8;
       const malformed = suppliedItems !== null && items.length !== suppliedItems.length;
       const unavailable = raw?.statusCode === 8 || items.some((item: any) => item.in_stock === false || item.in_stock === 0);
+      const failed = raw?.success === false || raw?.successful === false || raw?.statusCode != null && raw.statusCode !== 0 &&
+        !(unavailable && [6, 8].includes(raw.statusCode));
       const state = failed || malformed ? "unknown" : unavailable ? "unavailable" : items.length ? "present" :
         Array.isArray(data?.items) || raw?.statusCode === 0 && raw?.successful !== false && raw?.data === null ? "empty" : "unknown";
       const amount = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;

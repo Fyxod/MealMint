@@ -139,3 +139,7 @@ Source9accac2 is deployed/pushed; CI38052652042passed343synthetictests. Actual L
 ## 2026-10-11 — Read-only cart source ready
 
 Eight new synthetic current-cart tests plus the existing suite passed:351tests/18files, typecheck and production build. The tool hides address/session/cart/payment payloads, distinguishes empty/unavailable/unknown responses and refuses stale payable prices on explicit provider failure or malformed item lists. No cart writes or approval are created. Full suite was rerun after the overnight interruption because process handles were no longer available; existing historical351 result is not the sole completion marker. Deployment and actual Luna max both-channel read-only retests are next.
+
+## 2026-10-11 — Overnight unavailable-cart edge case
+
+Source2207dd0 deployed/pushed, archiveSHA256ecdc7e1675c37fc0f6c7513807889ce9989d04fb6b16f4e6457aedcd8a3d635f;CI38092300818passed351tests. Fresh actual Luna max web correctly said its read failed and did not change the cart or claim yesterday's mobile159 as a current verified price. Protected raw official read current-cart-before-readonly-raw-20261011.json shows status6, regular3burgeritems/in_stock0, stale267/discount0. No food mutation occurred. Adapter follow-up allows explicitly unavailable status6/8 get_cart state for diagnostics only, continuing to reject all failed writes and suppress payable totals;359tests/18files/typecheck/buildpassed. Final follow-up deployment and both-channel live checks remain.

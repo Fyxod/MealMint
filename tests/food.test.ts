@@ -184,8 +184,8 @@ describe('LiveFoodGateway', () => {
     expect(sdk.client.callTool).toHaveBeenCalledOnce();
   });
 
-  it.each([0, false])('exposes a readable status-8 cart with explicit out-of-stock flag %s for identity checks only', async inStock => {
-    const cart = { statusCode: 8, statusMessage: 'Synthetic stock changed', data: { items: [{ menu_item_id: 'synthetic-item', quantity: 2, in_stock: inStock }], pricing: { item_total: 300, to_pay: 304 } } };
+  it.each([[6, 0], [6, false], [8, 0], [8, false]])('exposes readable status %s with explicit out-of-stock flag %s for identity checks only', async (statusCode, inStock) => {
+    const cart = { statusCode, statusMessage: 'Synthetic stock changed', data: { items: [{ menu_item_id: 'synthetic-item', quantity: 2, in_stock: inStock }], pricing: { item_total: 300, to_pay: 304 } } };
     sdk.client.callTool.mockResolvedValue({ structuredContent: cart, content: [], isError: false });
     await expect(gateway().call('get_food_cart', {})).resolves.toEqual(cart);
     expect(sdk.client.callTool).toHaveBeenCalledOnce();
@@ -197,6 +197,20 @@ describe('LiveFoodGateway', () => {
     expect(error).toBeInstanceOf(SwiggyResponseError);
     expect(error.reason).toBe('UNAVAILABLE');
     expect(sdk.client.callTool).toHaveBeenCalledOnce();
+  });
+
+  it.each(['update_food_cart', 'apply_food_coupon', 'flush_food_cart'])('never treats status 6 from %s as a successful write', async name => {
+    sdk.client.callTool.mockResolvedValue({ structuredContent: { statusCode: 6, data: { items: [{ menu_item_id: 'synthetic-item', quantity: 3, in_stock: 0 }] } }, content: [], isError: false });
+    await expect(gateway().call(name, {})).rejects.toBeInstanceOf(SwiggyResponseError);
+    expect(sdk.client.callTool).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { statusCode: 6, data: { items: [{ in_stock: true }] } },
+    { statusCode: 6, successful: false, data: { items: [{ in_stock: 0 }] } },
+  ])('keeps malformed or explicitly unsuccessful status-6 reads rejected %#', async cart => {
+    sdk.client.callTool.mockResolvedValue({ structuredContent: cart, content: [], isError: false });
+    await expect(gateway().call('get_food_cart', {})).rejects.toBeInstanceOf(SwiggyResponseError);
   });
 
   it.each([
