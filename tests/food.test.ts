@@ -232,6 +232,20 @@ describe('LiveFoodGateway', () => {
     await expect(gateway().call('get_food_cart', {})).resolves.toEqual(cart);
   });
 
+  it('reads the exact observed delivery-refusal cart for diagnostics only while rejecting all writes', async () => {
+    const cart = { statusCode: 5, statusMessage: 'We are currently not accepting orders for this outlet in your location',
+      data: { items: [{ menu_item_id: 'synthetic-item', quantity: 3, in_stock: 1 }], pricing: { to_pay: 279 } } };
+    sdk.client.callTool.mockResolvedValue({ structuredContent: cart, content: [], isError: false });
+    const live = gateway();
+    await expect(live.call('get_food_cart', {})).resolves.toEqual(cart);
+    for (const name of ['update_food_cart', 'apply_food_coupon', 'flush_food_cart'])
+      await expect(live.call(name, {})).rejects.toBeInstanceOf(SwiggyResponseError);
+    sdk.client.callTool.mockResolvedValue({ structuredContent: { ...cart, statusMessage: 'Unrecognized provider failure' }, content: [], isError: false });
+    await expect(live.call('get_food_cart', {})).rejects.toBeInstanceOf(SwiggyResponseError);
+    sdk.client.callTool.mockResolvedValue({ structuredContent: { ...cart, successful: false }, content: [], isError: false });
+    await expect(live.call('get_food_cart', {})).rejects.toBeInstanceOf(SwiggyResponseError);
+  });
+
   it.each([
     [{ statusCode: 1, errorCodes: ['INVALID_ADDON'] }, 'INVALID_ADDON'],
     [{ statusCode: 8, data: { items: [{ in_stock: 0 }] } }, 'UNAVAILABLE'],

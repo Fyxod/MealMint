@@ -2,7 +2,7 @@
 
 Chat about your budget and food preferences in a web app or a private Telegram chat. A Codex-powered agent explores restaurants, menus and contextual deals, then shortlists inexpensive options. Delivered totals are checked only after you approve a temporary cart comparison.
 
-**Prototype status:** the default uses a real Codex LLM with a clearly labelled synthetic Swiggy catalogue. The official MCP transport and Swiggy OAuth are implemented, but real account data and staging cart behaviour require approved Swiggy access. This app never exposes ordering or payment tools. It finds the cheapest among inspected options; paginated discovery cannot establish the cheapest across every restaurant.
+**Owner deployment:** the hosted web app and paired Telegram bot use approved live Swiggy access and Codex authentication. Real interface/cart checks and remaining app/MCP coupon discrepancies are recorded in [live validation](docs/LIVE_VALIDATION.md) and [optimization research](docs/OPTIMIZATION_RESEARCH.md). Local defaults use a clearly labelled synthetic Swiggy catalogue with the real Codex LLM. This app never exposes ordering or payment tools. It finds the cheapest among inspected options; bounded discovery cannot establish the cheapest across every restaurant.
 
 ## Run locally
 
@@ -36,13 +36,15 @@ APP_ORIGIN=http://localhost:3000 npm start
 3. In web Settings, select **Pair Telegram** and open the generated link. The pairing code expires after five minutes and can be used once.
 4. Send `/addresses`, choose an address, and chat normally. `/new` starts fresh; `/cancel` stops the current operation.
 
-Only the paired user's private chat can access the account. Web and Telegram have separate conversations but share the same Codex provider, Swiggy account and saved user directives. Long polling needs no public Telegram webhook. A cart comparison in either channel locks the shared comparison service. Telegram requires an empty existing cart; the web app can explicitly approve discarding a nonempty cart.
+Only the paired user's private chat can access the account. Web and Telegram have separate conversations but share the same Codex provider, Swiggy account and saved user directives. Long polling needs no public Telegram webhook. A cart comparison in either channel locks the shared comparison service. Both channels display a separate explicit discard approval when the existing cart is nonempty.
 
 ## Remember preferences and find combinations
 
 Ask “Remember I prefer vegetarian lunches” or “Forget my mild-spice preference.” The agent can also save stable useful preferences on its own and tell you what it remembered. Settings shows the source and lets you add or delete directives. They survive restarts in the encrypted runtime store, with a limit of 30 directives of 500 characters each. Current requests override saved defaults. One-off budgets, credentials, exact addresses and transcripts should not be saved.
 
-The agent can combine up to five observed dishes with confirmed customization choices from one restaurant, including useful add-ons for coupon thresholds. A bundle’s quantities are multiplied by the requested bundle count; both approval screens display the resulting total count of each item. The agent sees the same final counts to avoid multiplying an exact food request twice. The backend compares the baseline and up to three eligible non-payment coupon codes separately, then keeps the lowest verified payable amount. Coupon stacking is not assumed. Above-budget subtotals may be proposed as clearly marked savings hypotheses; they count as affordable only after a verified total. This is bounded exploration, not exhaustive optimization.
+The agent can combine up to five observed dishes with confirmed customization choices from one restaurant, including useful add-ons for coupon thresholds. A bundle’s quantities are multiplied by the requested bundle count; both approval screens display the resulting total count of each item. The agent sees the same final counts to avoid multiplying an exact food request twice. The backend compares the baseline and up to five eligible non-payment coupon codes separately, then keeps the lowest verified payable amount. A restaurant code explicitly supplied by the user can also be frozen as an unverified approved trial; a user hint is kept separate from gateway-listed offers. Coupon stacking is not assumed. Above-budget subtotals may be proposed as clearly marked savings hypotheses; they count as affordable only after a verified total. This is bounded exploration, not exhaustive optimization.
+
+Ask the agent to inspect an existing cart when reviewing a price or coupon shown in the Swiggy app. `food_current_cart` reads without changing food or applying codes, and exposes only food counts and necessary price/coupon state. A printed code with zero discount is not verified savings. Unavailable, delivery-refused or unknown cart states withhold all monetary fields. An existing cheaper mobile checkout should be preserved and its source distinguished from MCP; the known FLAT100 discrepancy remains unresolved.
 
 ## Connect real Swiggy data
 

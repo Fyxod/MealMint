@@ -1,4 +1,4 @@
-> Current checkpoint — 2026-10-10: source9accac2 is deployed;343 automated tests and CI passed. Actual dashboard strict-diet/coupon-provenance retest passed. Owner mobile checkout now proves three Burger King burgers at ₹159 while MCP reports₹267/discount0 at the same outlet locality. New read-only cart tool and both-channel preservation retests are in progress; see [optimization investigation](OPTIMIZATION_RESEARCH.md). Earlier dated pending/completed statements are historical.
+> Current checkpoint — 2026-10-11: source0e241d4 is deployed;359 automated tests and CI passed. Actual Luna max web and Telegram read-only preservation checks passed; independent cart fingerprints match. Owner mobile checkout proves Burger King₹159 on10October, but MCP did not reproduce the discount and now marks the food unavailable. See [optimization investigation](OPTIMIZATION_RESEARCH.md). Earlier dated pending/completed statements are historical.
 
 # Live integration validation — 2026-10-07
 

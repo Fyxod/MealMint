@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { cartData, cartFingerprint, cartReceiptFingerprint, rejectedCouponMarkerOnly } from "./cart.js";
+import { cartData, cartFingerprint, cartReceiptFingerprint, rejectedCouponMarkerOnly, cartDeliveryUnavailable } from "./cart.js";
 import { cartPlanItems } from "./plans.js";
 import { z } from "zod";
 import type {
@@ -585,10 +585,11 @@ export class FoodService extends EventEmitter {
       const suppliedItems = Array.isArray(data?.items) ? data.items : null;
       const items = suppliedItems?.filter((item: any) => item && typeof item === "object" && !Array.isArray(item)) ?? [];
       const malformed = suppliedItems !== null && items.length !== suppliedItems.length;
+      const deliveryUnavailable = cartDeliveryUnavailable(raw);
       const unavailable = raw?.statusCode === 8 || items.some((item: any) => item.in_stock === false || item.in_stock === 0);
       const failed = raw?.success === false || raw?.successful === false || raw?.statusCode != null && raw.statusCode !== 0 &&
-        !(unavailable && [6, 8].includes(raw.statusCode));
-      const state = failed || malformed ? "unknown" : unavailable ? "unavailable" : items.length ? "present" :
+        !(unavailable && [6, 8].includes(raw.statusCode)) && !deliveryUnavailable;
+      const state = failed || malformed ? "unknown" : deliveryUnavailable ? "delivery_unavailable" : unavailable ? "unavailable" : items.length ? "present" :
         Array.isArray(data?.items) || raw?.statusCode === 0 && raw?.successful !== false && raw?.data === null ? "empty" : "unknown";
       const amount = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
       const reportedAmount = (value: unknown) => state === "present" ? amount(value) : null;
@@ -605,7 +606,7 @@ export class FoodService extends EventEmitter {
         coupon: { code: typeof data?.offers?.coupon_applied === "string" ? data.offers.coupon_applied.slice(0, 50) : null,
           discount, positiveDiscount: discount !== null && discount > 0 },
         freeDeliveryApplied: data?.offers?.free_delivery_applied === true,
-        note: "Read-only gateway snapshot, no cart changes. A printed code with zero discount is not verified coupon savings. If the user reports a lower app checkout total, disclose the mismatch and preserve that cart; do not call this gateway price the cheapest or imply their app offer is invalid. When state is unavailable the gateway marks food unavailable; unknown state cannot establish availability. Monetary fields are withheld outside present state: retained items/code do not establish fresh prices or current coupon eligibility.",
+        note: "Read-only gateway snapshot, no cart changes. A printed code with zero discount is not verified coupon savings. If the user reports a lower app checkout total, disclose the mismatch and preserve that cart; do not call this gateway price the cheapest or imply their app offer is invalid. State delivery_unavailable means the gateway explicitly says this outlet is not accepting orders in the selected delivery location; an open menu does not override this and it does not prove global closure or stock failure. State unavailable means food unavailable; unknown cannot establish availability. Monetary fields are withheld outside present state: retained items/code do not establish fresh prices or current coupon eligibility.",
       };
     }
     if (name === "food_customization_options" || name === "food_customize") {
@@ -1155,6 +1156,8 @@ export class FoodService extends EventEmitter {
     return true;
   }
   private quote(c: Conversation, x: Candidate, raw: any): Quote {
+    if (cartDeliveryUnavailable(raw))
+      throw new Error("Swiggy is not accepting orders from this outlet for your delivery location. No payable quote was verified.");
     const data = cartData(raw),
       p = data?.pricing;
     if (

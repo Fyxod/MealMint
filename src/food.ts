@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { FoodGateway } from "./types.js";
-import { cartData, cartReceiptFingerprint } from "./cart.js";
+import { cartData, cartReceiptFingerprint, cartDeliveryUnavailable } from "./cart.js";
 
 const allowed = new Set([
   "get_addresses",
@@ -142,7 +142,9 @@ export class LiveFoodGateway implements FoodGateway {
       const readableUnavailableCart = name === "get_food_cart" && [6, 8].includes(data.statusCode) &&
         data.successful !== false && Array.isArray(data.data?.items) &&
         data.data.items.some((item: any) => item.in_stock === 0 || item.in_stock === false);
-      if (!readableUnavailableCart && (data.successful === false || (typeof data.statusCode === "number" && data.statusCode !== 0)))
+      const readableDeliveryRefusal = name === "get_food_cart" && cartDeliveryUnavailable(data) &&
+        data.successful !== false && Array.isArray(data.data?.items);
+      if (!readableUnavailableCart && !readableDeliveryRefusal && (data.successful === false || (typeof data.statusCode === "number" && data.statusCode !== 0)))
         throw new SwiggyResponseError(data.errorCodes?.includes("INVALID_ADDON") ? "INVALID_ADDON" :
           data.statusCode === 8 || data.errorCodes?.some((x: string) => /UNAVAILABLE|OUT_OF_STOCK|INVALID_ITEM/.test(x)) ? "UNAVAILABLE" : "REJECTED",
           name === "update_food_cart" && data.statusCode === 8 && Array.isArray(cartData(data)?.items) && cartData(data).items.length

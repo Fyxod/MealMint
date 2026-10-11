@@ -28,6 +28,36 @@ async function ready() {
 }
 
 describe('read-only current cart evidence', () => {
+  it('does not turn a post-update delivery refusal with positive item stock into a comparison quote', async () => {
+    class RefusedDeliveryGateway extends MockFoodGateway {
+      async call(name: string, args: Record<string, any>): Promise<any> {
+        const raw: any = await super.call(name, args);
+        if (name === 'get_food_cart' && raw.data?.items?.length)
+          return { ...raw, statusCode: 5, statusMessage: 'We are currently not accepting orders for this outlet in your location' };
+        return raw;
+      }
+    }
+    const gateway = new RefusedDeliveryGateway(); const service = new FoodService(gateway, agent); const c = service.create();
+    await service.selectAddress(c.id, 'mock-home'); service.updatePreferences(c.id, { budget: 300 });
+    const search = await service.dispatch(c.id, 'food_search', { query: 'thali' });
+    const approval = await service.requestComparison(c.id, [search.candidates[0].id]);
+    const result = await service.approve(c.id, approval.id);
+    expect(result.quotes).toEqual([]);
+    expect(result.error).toContain('not accepting orders');
+    expect((await gateway.call('get_food_cart', { addressId: 'mock-home' })).data.items).toEqual([]);
+  });
+  it('distinguishes an open outlet refusing delivery from food stock or global closure and hides stale money', async () => {
+    const { gateway, service, c } = await ready();
+    gateway.raw.statusCode = 5; gateway.raw.statusMessage = 'We are currently not accepting orders for this outlet in your location';
+    const snapshot = await service.dispatch(c.id, 'food_current_cart', {});
+    expect(snapshot.state).toBe('delivery_unavailable');
+    expect(snapshot.items[0].quantity).toBe(3);
+    expect(snapshot.pricing).toEqual({ itemSubtotal: null, delivery: null, charges: null, total: null });
+    expect(snapshot.coupon).toEqual({ code: 'SYNTHETIC100', discount: null, positiveDiscount: false });
+    expect(gateway.calls).toEqual(['get_food_cart']); expect(c.approval).toBeNull();
+    gateway.raw.statusMessage = 'Unrecognized diagnostic';
+    expect(await service.dispatch(c.id, 'food_current_cart', {})).toMatchObject({ state: 'unknown', pricing: { total: null } });
+  });
   it('exposes actual counts and zero-saving coupon state without private cart/address/session/payment fields or writes', async () => {
     const { gateway, service, c } = await ready();
     const snapshot = await service.dispatch(c.id, 'food_current_cart', {});

@@ -4,6 +4,13 @@ export function cartData(raw: any): any {
   return raw?.data?.pricing ? raw.data : raw?.pricing ? raw :
     raw?.data?.data?.pricing ? raw.data.data : (raw?.data ?? raw);
 }
+
+// Observed provider status 5 needs its explicit message: this is delivery
+// refusal, not proof that the outlet is closed or the items are out of stock.
+export function cartDeliveryUnavailable(raw: any): boolean {
+  return raw?.statusCode === 5 && typeof raw.statusMessage === "string" &&
+    /^We are currently not accepting orders for this outlet in your location[.!]?$/i.test(raw.statusMessage.trim());
+}
 export function cartFingerprint(raw: any) {
   const c = cartData(raw);
   return createHash("sha256").update(JSON.stringify({

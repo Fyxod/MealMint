@@ -41,7 +41,26 @@ The owner supplied a checkout screenshot showing **three regular Crispy Veg Burg
 
 An immediately fresh read-only `get_food_cart` still returned regular item116696296 ×3, ₹225 subtotal, ₹0 coupon discount and ₹267 payable. Default and specific-code coupon lookups remained empty. Protected raw evidence is `optimization-mobile159-cart.json` and `optimization-mobile159-offers.json` on the VM. The owner cart is preserved; no replacement comparison or further coupon application is appropriate merely to reproduce the already better mobile cart.
 
-A new app-level `food_current_cart` tool is being validated to expose only counts, price/coupon state and source/time, hiding location, cart/session and payment fields. It creates no comparison and performs no writes. The prompt instructs the agent to compare user mobile evidence with MCP honestly, preserve the cheaper cart, consider reuse windows and avoid invented payment restrictions. Actual interface retests are tracked separately in project memory.
+The app-level `food_current_cart` tool is implemented and validated to expose only counts, price/coupon state and source/time, hiding location, cart/session and payment fields. It creates no comparison and performs no writes. The prompt instructs the agent to compare user mobile evidence with MCP honestly, preserve the cheaper cart, consider reuse windows and avoid invented payment restrictions. Actual interface retests are recorded below.
+
+## 11 October final read-only validation
+
+Source `0e241d4` was hash-verified and deployed; [CI 38092605602](https://github.com/Fyxod/MealMint/actions/runs/38092605602) passed **359 synthetic tests across 18 files**, typecheck, build, memory validation and dependency audit. Eight new current-cart cases and subsequent unavailable-response cases cover privacy, counts, zero/positive discount, successful null cart, failed/malformed responses, invalid amounts, saved-address requirements and rejection of failed writes.
+
+The fresh overnight cart retains three regular burgers but returns status6 with explicit `in_stock: 0`. Earlier diagnostic prices in that response are stale checkout evidence, so the new tool withholds every monetary field outside present state. No generic meaning of status6 is assumed without that explicit stock flag.
+
+- **Dashboard, actual gpt-6-luna/max:** matched the retained three burger items and printed FLAT100, explained that the gateway marks food unavailable, distinguished yesterday's owner mobile checkout from current evidence, and neither changed the cart nor applied a code. No approval or quote was created.
+- **Telegram, actual gpt-6-luna/max:** the same natural request and freshly selected saved address produced the same honest unavailable/no-current-price explanation without replacement trials or code application.
+- Independent official before/after reads had the **same cart fingerprint**, retaining exactly three burgers. Protected evidence: `current-cart-final-before-20261011.json` and `current-cart-final-after-20261011.json` on the VM. Privacy-limited UI proofs: `.local/hosting/current-cart-web-20261011.png` and `.local/hosting/current-cart-telegram-20261011.png`.
+- Service active with no automatic restarts; app/health/resume HTTPS200, unsigned API401, missing CSRF403 and invalid OAuth callback400. Connected Codex/Swiggy and paired Telegram confirmed; configuration remains gpt-6-luna/max/live. Service peak about351MiB, VM available363MiB and118MiB swap used out of2GiB. Owner-use observations do not require more RAM/authentication; this is not sustained-load capacity evidence.
+
+The read-only preservation stage is complete. Reproducing the mobile FLAT100 discount through MCP remains an external evidence gap, not a passing optimization result. The protected support draft was updated with mobile₹159 proof, matching outlet locality, gateway/menu failures and the later unavailable read; it has not been sent.
+
+## 11 October reopened outlet check
+
+The owner asked to resume when Burger King should be open. Fresh `get_restaurant_menu` confirms outlet655020 **isOpen:true**, but `get_food_cart` returns **status5** with the exact message “We are currently not accepting orders for this outlet in your location.” It retains the same three regular burgers with stock1, a printed FLAT100/zero discount, and a rejected-state ₹279 amount. Fresh default/specific FLAT100 lookups are still empty/CODonly. This is distinct from the overnight stock0 case: an open menu does not establish delivery availability, and retained rejected-state prices are not payable evidence. The cart was not mutated.
+
+Protected evidence uses `bk-reopen-*-2026-10-11T08-25-41-091Z.json`; the earlier opening-only menu probe is separately retained. Follow-up source recognizes only the exact observed status/message combination as `delivery_unavailable` for read-only diagnosis, withholds every monetary field, refuses a comparison quote even when stock is positive and continues to reject failed writes. Fresh actual web/Telegram wording tests remain pending for this follow-up.
 
 ## Research and how it is used
 
