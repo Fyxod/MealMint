@@ -134,6 +134,18 @@ async function readyCoverage(savings: Record<string, number>, gateway = new Coup
 const five = { FIRST: 5, SECOND: 10, THIRD: 15, FOURTH: 60, FIFTH: 80 };
 
 describe('FoodService bounded coupon coverage', () => {
+  it.each([{}, { coupon_sections: null }, { coupon_sections: [{ coupons: [null] }] }])('retains the baseline as incomplete coverage when the coupon feed is unreadable', async feed => {
+    const { gateway, service, conversation, approval } = await readyCoverage({});
+    gateway.couponResponse = feed;
+    const result = await service.approve(conversation.id, approval.id);
+    expect(result.error).toContain('unreadable coupon feed');
+    expect(result.quotes).toHaveLength(1);
+    expect(result.quotes[0].couponChecks?.status).toBe('pending');
+    expect(couponCheckSummary(result.quotes[0])).toContain('incomplete');
+    expect(gateway.calls.some(call => call.name === 'apply_food_coupon')).toBe(false);
+    expect((await gateway.call('get_food_cart', { addressId: 'mock-home' })).data.items).toEqual([]);
+  });
+
   it.each(['FOURTH', 'FIFTH'])('finds a %s-code winner beyond the old three-trial limit and clears the test cart', async winningCode => {
     const savings = { ...five, [winningCode]: 90 };
     const { gateway, service, conversation, approval } = await readyCoverage(savings);

@@ -51,12 +51,35 @@ const hint = (service: FoodService, id: string, candidateId: string, couponCode:
   service.dispatch(id, 'food_offers', { candidateId, couponCode });
 
 describe('explicit user coupon hints', () => {
+  it('refreshes an intermittent empty feed without caching it or mutating the cart', async () => {
+    const { gateway, service, c, candidate } = await ready();
+    const initial = await service.dispatch(c.id, 'food_offers', { candidateId: candidate.id });
+    gateway.coupons = { coupon_sections: [{ coupons: [{ code: 'SYNTHETIC20', applicable: true }] }] };
+    const refreshed = await service.dispatch(c.id, 'food_offers', { candidateId: candidate.id });
+    expect(initial.discovery.state).toBe('empty');
+    expect(refreshed.discovery).toMatchObject({ state: 'returned', visible: 1 });
+    expect(refreshed.source).toBe('mock');
+    expect(Number.isFinite(Date.parse(refreshed.observedAt))).toBe(true);
+    expect(gateway.calls.filter(call => call.name === 'fetch_food_coupons')).toHaveLength(2);
+    expect(gateway.calls.some(call => ['update_food_cart', 'apply_food_coupon', 'flush_food_cart'].includes(call.name))).toBe(false);
+    expect(c.approval).toBeNull(); expect(c.quotes).toEqual([]);
+  });
+
+  it.each([{}, { coupon_sections: null }, { coupon_sections: [{ coupons: [null] }] }])('does not report an unreadable feed as disproving a user coupon', async feed => {
+    const { gateway, service, c, candidate } = await ready();
+    await service.chat(c.id, 'Please check FLAT100.'); gateway.coupons = feed;
+    const result = await hint(service, c.id, candidate.id, 'FLAT100');
+    expect(result.discovery).toMatchObject({ state: 'unknown', requestedCodeSource: 'user', requestedCodeReturned: null });
+    expect(result.requestedCouponTrial).toBe('FLAT100');
+    expect(gateway.calls.some(call => call.name === 'apply_food_coupon')).toBe(false);
+  });
+
   it('tries an explicitly supplied code despite an empty catalogue and verifies its actual lower payable price', async () => {
     const { gateway, service, c, candidate } = await ready();
     await service.chat(c.id, 'Please test FLAT100 from my synthetic offer.');
     const result = await hint(service, c.id, candidate.id, 'FLAT100');
     expect(result.requestedCouponTrial).toBe('FLAT100');
-    expect(result.discovery).toEqual({ visible: 0, scope: 'cod-only', requestedCodeSource: 'user', requestedCodeReturned: false });
+    expect(result.discovery).toEqual({ state: 'empty', visible: 0, scope: 'cod-only', requestedCodeSource: 'user', requestedCodeReturned: false });
     expect(gateway.calls.filter(call => call.name === 'fetch_food_coupons').at(-1)?.args).toMatchObject({ restaurantId: 'r1', couponCode: 'FLAT100' });
     expect(gateway.calls.some(call => call.name === 'apply_food_coupon')).toBe(false);
     const approval = await service.requestComparison(c.id, [candidate.id]);
@@ -74,7 +97,7 @@ describe('explicit user coupon hints', () => {
     await service.chat(c.id, 'Please test FLAT100.');
     gateway.coupons = { coupon_sections: [{ coupons: [{ title: 'Flat100', applicable: false, applicabilityStatus: 'NOT_APPLICABLE' }] }] };
     const result = await hint(service, c.id, candidate.id, 'FLAT100');
-    expect(result.discovery).toEqual({ visible: 1, scope: 'visible', requestedCodeSource: 'user', requestedCodeReturned: true });
+    expect(result.discovery).toEqual({ state: 'returned', visible: 1, scope: 'visible', requestedCodeSource: 'user', requestedCodeReturned: true });
     expect(result.offers.coupon_sections[0].coupons[0].applicable).toBe(false);
     expect(gateway.calls.some(call => call.name === 'apply_food_coupon')).toBe(false);
     const ordinary = await service.dispatch(c.id, 'food_offers', { candidateId: candidate.id });

@@ -20,7 +20,7 @@ import { defaultRequest } from "./types.js";
 import { redact } from "./security.js";
 import { DirectiveStore } from "./directives.js";
 import { customizationDetails, selectCustomizations, selectionPayload, selectionsMatch, variantsMatch, validateCartAddons } from "./customizations.js";
-import { couponCode as redeemableCouponCode, couponTrialPlan } from "./coupons.js";
+import { couponCode as redeemableCouponCode, couponTrialPlan, couponDiscoveryState } from "./coupons.js";
 import { menuItems, menuTruncated, restaurantOpen } from "./menu.js";
 import { SwiggyResponseError } from "./food.js";
 
@@ -801,16 +801,18 @@ export class FoodService extends EventEmitter {
       );
       if (name === "food_offers") {
         const discovery = couponTrialPlan(raw);
+        const state = couponDiscoveryState(raw);
         const listedCodes = (Array.isArray(raw?.coupon_sections) ? raw.coupon_sections : [])
           .flatMap((section: any) => Array.isArray(section?.coupons) ? section.coupons : [])
           .map(redeemableCouponCode).filter((code: string | null): code is string => code !== null);
         return {
+          source: this.gateway.mode, observedAt: new Date().toISOString(),
           offers: raw,
           requestedCouponTrial: couponCode ?? null,
-          discovery: { visible: discovery.visible, scope: discovery.scope,
+          discovery: { state, visible: discovery.visible, scope: discovery.scope,
             requestedCodeSource: couponCode ? "user" : null,
-            requestedCodeReturned: couponCode ? listedCodes.some((code: string) => code.toUpperCase() === couponCode.toUpperCase()) : null },
-          note: "Contextual visibility, not verified savings. The current gateway filters to cash-on-delivery-compatible coupons; online/card-only offers may be absent. An empty list does not disprove a coupon shown in the Swiggy app. A user-supplied code is queued for the next approved comparison, not verified or applied yet. Applicability may refer to the current cart; proposed items or thresholds can change eligibility. Payment-only offers unverified.",
+            requestedCodeReturned: couponCode && state !== "unknown" ? listedCodes.some((code: string) => code.toUpperCase() === couponCode.toUpperCase()) : null },
+          note: "Fresh read-only lookup, no cached offers or cart changes. Discovery unknown means the feed could not be established, not no coupons. Contextual visibility, not verified savings. The current gateway filters to cash-on-delivery-compatible coupons; online/card-only offers may be absent. An empty list does not disprove a coupon shown in the Swiggy app. A user-supplied code is queued for the next approved comparison, not verified or applied yet. Applicability may refer to the current cart; proposed items or thresholds can change eligibility. Payment-only offers unverified.",
         };
       }
       return {
@@ -972,6 +974,8 @@ export class FoodService extends EventEmitter {
           addressId: c.request.addressId,
           restaurantId: x.restaurantId,
         });
+        if (couponDiscoveryState(coupons) === "unknown")
+          throw new Error("Swiggy returned an unreadable coupon feed. The cart price is verified, but coupon checks are incomplete.");
         const plan = couponTrialPlan(coupons);
         const requested = a.couponHints?.[x.restaurantId] ?? [];
         const allCodes = [...requested, ...plan.codes, ...plan.untried].filter((code, index, values) =>

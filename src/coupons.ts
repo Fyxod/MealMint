@@ -1,5 +1,13 @@
 import type { Quote } from "./types.js";
 
+// A missing or malformed feed is not evidence that no offers exist.
+export function couponDiscoveryState(raw: any): "returned" | "empty" | "unknown" {
+  if (raw?.success === false || raw?.successful === false || !Array.isArray(raw?.coupon_sections) ||
+      raw.coupon_sections.some((section: any) => !section || !Array.isArray(section.coupons) ||
+        section.coupons.some((offer: any) => !offer || typeof offer !== "object" || Array.isArray(offer)))) return "unknown";
+  return raw.coupon_sections.some((section: any) => section.coupons.length > 0) ? "returned" : "empty";
+}
+
 // Use explicit redeemable codes, never Swiggy's internal UUID offer identifiers.
 export function couponCode(offer: any): string | null {
   const valid = (value: unknown): value is string => typeof value === "string" &&

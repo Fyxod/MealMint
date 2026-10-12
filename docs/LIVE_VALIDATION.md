@@ -1,4 +1,4 @@
-> Current checkpoint — 2026-10-11: source0e241d4 is deployed;359 automated tests and CI passed. Actual Luna max web and Telegram read-only preservation checks passed; independent cart fingerprints match. Owner mobile checkout proves Burger King₹159 on10October, but MCP did not reproduce the discount and now marks the food unavailable. See [optimization investigation](OPTIMIZATION_RESEARCH.md). Earlier dated pending/completed statements are historical.
+> Current checkpoint — 2026-10-12: functional runtime e3a041c is deployed; 362 tests and source CI passed. Actual 11 October Luna max web/Telegram read-only checks and unchanged-cart proof passed after the gateway recovered to status0. The consumer website also rejected its own listed FLAT100; today's six-refresh sample ended in explicit No Offers. Fresh MCP tests await owner reconnection because OAuth expired. New offer-freshness source has 369 passing synthetic tests; deployment and actual agent verification remain pending. See [optimization investigation](OPTIMIZATION_RESEARCH.md). Earlier dated statements are historical.
 
 # Live integration validation — 2026-10-07
 
